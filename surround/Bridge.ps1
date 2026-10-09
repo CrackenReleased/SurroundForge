@@ -1,4 +1,4 @@
-<# Samsung optical 5.1 bridge, v0.1.9-local. Only controls this project's encoder. #>
+<# SurroundForge bridge, v0.1.10-local. Only controls this project's encoder. #>
 [CmdletBinding()]
 param([ValidateSet('Start','Stop','Status','Test','Diagnostics','EnableStartup','DisableStartup')][string]$Action='Start')
 $ErrorActionPreference='Stop'
@@ -18,7 +18,24 @@ if(Test-Path -LiteralPath $config) {
     if($line -match '^\s*out_id\s*=\s*(.+?)\s*$'){$outputId=$Matches[1]}
   }
 }
-$startup=Join-Path ([Environment]::GetFolderPath('Startup')) 'Samsung Optical 5.1.lnk'
+$startup=Join-Path ([Environment]::GetFolderPath('Startup')) 'SurroundForge.lnk'
+
+function Test-BridgeStartupOwner([string]$Arguments,[string]$Root) {
+  if($Arguments -notmatch '(?i)(?:^|\s)-Action\s+Start(?:\s|$)'){return $false}
+  if($Arguments -match '(?i)(?:^|\s)-File\s+"([^"]+)"'){$target=$Matches[1]}
+  elseif($Arguments -match '(?i)(?:^|\s)-File\s+(\S+)'){$target=$Matches[1]}
+  else{return $false}
+  try {return [IO.Path]::GetFullPath($target) -eq [IO.Path]::GetFullPath((Join-Path $Root 'Bridge.ps1'))}
+  catch {return $false}
+}
+function Remove-OwnedStartupShortcuts($Shell,[string]$KeepPath='') {
+  # Migrate earlier shortcut names by exact script ownership, not receiver name.
+  foreach($file in Get-ChildItem -LiteralPath (Split-Path $startup -Parent) -Filter '*.lnk' -File) {
+    if($file.FullName -eq $KeepPath){continue}
+    $link=$Shell.CreateShortcut($file.FullName)
+    if(Test-BridgeStartupOwner $link.Arguments $root){Remove-Item -LiteralPath $file.FullName}
+  }
+}
 
 function Invoke-Control([string[]]$Arguments) {
   $result=& $control @Arguments
@@ -65,7 +82,7 @@ function Save-BridgeDiagnostics {
     try {
       $events=@(Get-WinEvent -FilterHashtable @{LogName=$name;StartTime=$since} -MaxEvents 5000 -ErrorAction Stop |
         Where-Object {$_.ProviderName -match 'Audio|Kernel-PnP|UserPnp|DriverFramework' -or
-          ($_.Level -le 3 -and $_.Message -match 'audio|C-Media|VB-Audio|NFSHeat|dirtrally2|engine.exe|Samsung') } |
+          ($_.Level -le 3 -and $_.Message -match 'audio|C-Media|VB-Audio|NFSHeat|dirtrally2|engine.exe') } |
         Select-Object -First 1000 TimeCreated,Id,LevelDisplayName,ProviderName,Message)
       ConvertTo-Json -InputObject $events -Depth 3 | Set-Content -LiteralPath (Join-Path $folder (($name -replace '[/\\]','_')+'.json')) -Encoding UTF8
       "$name : captured $($events.Count) matching events (newest 5000 scanned, 1000 retained)." | Add-Content -LiteralPath $report
@@ -138,7 +155,7 @@ $state=if(Test-Path -LiteralPath $statePath){Get-Content -LiteralPath $statePath
 $owned=Find-OwnedProcess $state
 if($Action -eq 'Diagnostics') {Save-BridgeDiagnostics;exit}
 if($Action -eq 'Status') {
-  [pscustomobject]@{Version='0.1.9-local';Running=[bool]$owned;ProcessId=if($owned){$owned.Id}else{$null};Log=$log}
+  [pscustomobject]@{Version='0.1.10-local';Running=[bool]$owned;ProcessId=if($owned){$owned.Id}else{$null};Log=$log}
   Invoke-Control @('--defaults')
   if($inputId){Invoke-Control @('--format',$inputId)}
   exit
@@ -146,21 +163,22 @@ if($Action -eq 'Status') {
 if($Action -eq 'EnableStartup') {
   $shell=New-Object -ComObject WScript.Shell
   $shortcut=$shell.CreateShortcut($startup)
+  if((Test-Path -LiteralPath $startup) -and -not (Test-BridgeStartupOwner $shortcut.Arguments $root)) {
+    throw 'The SurroundForge startup shortcut belongs to another installation. Disable startup there first.'
+  }
   $shortcut.TargetPath=Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
   $shortcut.Arguments='-NoProfile -ExecutionPolicy Bypass -File "'+$PSCommandPath+'" -Action Start'
   $shortcut.WorkingDirectory=$root
   $shortcut.WindowStyle=7
-  $shortcut.Description='Start the tested Samsung optical 5.1 encoder after sign-in'
+  $shortcut.Description='Start the tested SurroundForge encoder after sign-in'
   $shortcut.Save()
+  Remove-OwnedStartupShortcuts $shell $startup
   Write-Output "Startup enabled: $startup"
   exit
 }
 if($Action -eq 'DisableStartup') {
-  if(Test-Path -LiteralPath $startup){
-    $shell=New-Object -ComObject WScript.Shell
-    $shortcut=$shell.CreateShortcut($startup)
-    if($shortcut.Arguments.IndexOf($PSCommandPath,[StringComparison]::OrdinalIgnoreCase) -ge 0){Remove-Item -LiteralPath $startup}
-  }
+  $shell=New-Object -ComObject WScript.Shell
+  Remove-OwnedStartupShortcuts $shell
   Write-Output 'Startup disabled for this installation.'
   exit
 }
@@ -170,7 +188,7 @@ if($Action -eq 'Stop') {
   exit
 }
 if($Action -eq 'Test') {
-  if(-not $outputId){throw 'Open Samsung 5.1 Setup first to select this computer''s optical output.'}
+  if(-not $outputId){throw 'Open SurroundForge Setup first to select this computer''s optical output.'}
   if($owned){throw 'Stop the bridge before running its direct optical test.'}
   & $engine --config $config --tone-test
   if($LASTEXITCODE -ne 0){throw 'Optical speaker test failed.'}
@@ -181,7 +199,7 @@ if($owned) {
   if(-not (Stop-BridgeAndRestore $state $owned)){throw 'Could not stop the bridge safely before repairing its speaker layout.'}
   $state=$null;$owned=$null
 }
-if(-not $inputId -or -not $outputId){throw 'Open Samsung 5.1 Setup first to select this computer''s audio devices.'}
+if(-not $inputId -or -not $outputId){throw 'Open SurroundForge Setup first to select this computer''s audio devices.'}
 
 # Verify the virtual input before opening optical output. Never accept stereo as gaming 5.1.
 Ensure-VirtualMix51
@@ -197,7 +215,7 @@ if(Test-Path -LiteralPath $log) {Copy-Item -LiteralPath $log -Destination ($log+
 [IO.File]::WriteAllText($log,"Started: $((Get-Date).ToString('o'))`r`n")
 $arguments=@('--config',('"'+$config+'"'),'--require-surround','--hidden','--log',('"'+$log+'"'),'--activity-log',('"'+(Join-Path $root 'channel-activity.csv')+'"'))
 $process=Start-Process -FilePath $engine -ArgumentList $arguments -WorkingDirectory $root -WindowStyle Hidden -PassThru
-$newState=[pscustomobject]@{version='0.1.9-local';processId=$process.Id;startedTicks=$process.StartTime.ToUniversalTime().Ticks;defaults=$defaults;roles=$roles}
+$newState=[pscustomobject]@{version='0.1.10-local';processId=$process.Id;startedTicks=$process.StartTime.ToUniversalTime().Ticks;defaults=$defaults;roles=$roles}
 $newState | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $statePath -Encoding UTF8
 try {
   $ready=$false
@@ -209,7 +227,7 @@ try {
   }
   if(-not $ready){throw "Encoder did not become ready. See $log"}
   foreach($role in $roles){Invoke-Control @('--default',$inputId,$role) | Out-Null}
-  Write-Output "Samsung optical 5.1 running (PID $($process.Id)). Games use CABLE In 16ch."
+  Write-Output "SurroundForge running (PID $($process.Id)). Games use the configured virtual 5.1 input."
 } catch {
   $startupFailure=$_
   Stop-BridgeAndRestore $newState $process | Out-Null

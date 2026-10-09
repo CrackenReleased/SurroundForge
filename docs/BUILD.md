@@ -1,4 +1,4 @@
-# Build and verify SurroundForge v0.1.9
+# Build and verify SurroundForge v0.1.10
 
 The working audio installation is Windows x64. The native engine uses C++17, Visual Studio 2022 Build Tools with a Windows SDK, CMake, and dynamically linked FFmpeg libraries. Python 3 is used for several integration tests. WiX 3.14 is used to build the MSI. There is no new kernel driver to compile or sign.
 
@@ -6,7 +6,7 @@ From the repository root, obtain the FFmpeg development files using the existing
 
 ```powershell
 & .\surround\source\scripts\fetch-ffmpeg.ps1 -Prefer master
-cmake -S surround/source/engine -B surround/source/engine/build -G "Visual Studio 17 2022" -A x64 -DVAC3_VERSION=0.1.9-local
+cmake -S surround/source/engine -B surround/source/engine/build -G "Visual Studio 17 2022" -A x64 "-DVAC3_VERSION=0.1.10-local"
 cmake --build surround/source/engine/build --config Release
 ctest --test-dir surround/source/engine/build -C Release --output-on-failure
 ```
@@ -24,6 +24,9 @@ Safe tests that do not reconfigure this machine's live audio:
 & .\surround\tests\test_bridge_lifecycle.ps1
 & .\surround\tests\test_bridge_portable.ps1
 & .\surround\tests\test_setup.ps1
+& .\surround\tests\test_product_identity.ps1
+& .\surround\tests\test_startup_identity.ps1
+& .\surround\tests\test_setup_render.ps1
 & .\surround\tests\test_speaker_layout.ps1
 & .\surround\tests\test_repository_hygiene.ps1
 ```
@@ -50,3 +53,13 @@ Vendor download/provenance links are retained in `surround/installer/Third Party
 ```
 
 The round-trip test installs into the project's validation folder, uninstalls afterward, and checks that the working bridge's defaults and startup shortcut were preserved. Build output, staging copies and validation logs are local artifacts, not source files.
+
+`Test-Msi.ps1 -InstallRoundTrip -UpgradeFromMsi '<previous-msi-path>'` also tests upgrading a previous release installed in its default folder. It refuses to overwrite an existing previous-version folder. The new package remembers custom install folders, and its removal test omits `INSTALLFOLDER` to verify normal uninstall. Older releases require their original custom folder to be supplied during removal if their default folder was changed.
+
+To build a package while the live engine is running, use a separate build directory and pass its Release folder to the existing builder. This avoids replacing the active executable or its DLLs:
+
+```powershell
+cmake -S surround/source/engine -B surround/source/engine/build/package -G "Visual Studio 17 2022" -A x64 "-DVAC3_VERSION=0.1.10-local"
+cmake --build surround/source/engine/build/package --config Release
+& .\surround\installer\Build-Msi.ps1 -ReleaseDirectory "$PWD\surround\source\engine\build\package\Release"
+```

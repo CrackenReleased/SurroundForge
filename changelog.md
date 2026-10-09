@@ -9,7 +9,7 @@
 
 - Windows system volume and mute now control all six PCM channels before AC3 encoding.
 - Live mute regression failed before and passes after; native dB/six-channel and controller guards pass.
-- User confirmed audible volume changes and mute through Samsung.
+- User confirmed audible volume changes and mute through the connected receiver.
 
 
 ## v0.1.8 — 2026-10-09 02:14:10
@@ -29,3 +29,12 @@
 - Created a clean local source repository with build/setup/troubleshooting documentation and upstream attribution.
 - Kept machine-specific state, event logs, vendor binaries and installer artifacts outside version control; preserved their existing local copies.
 - Live integration tests now read this computer's configured devices. Added a repository hygiene regression.
+
+## v0.1.10 — 2026-10-09
+
+- Name the product, setup, MSI, install folder, Start menu and startup shortcut SurroundForge. Describe real-time 5.1 enabled through a USB optical adapter, independent of receiver brand.
+- Preserve the MSI upgrade identity; migrate earlier owned startup names without duplicate launches or changes to other installations.
+- Add receiver-neutral identity and startup ownership regressions, packaged native-version checks, upgrade validation, and an offscreen setup preview.
+- Support a separate package build so the working audio engine can remain running during games. Retain dependency licenses and attribution.
+- Remember custom installation folders so normal removal can find and stop the correct installed bridge; pin this with an actual install/uninstall regression.
+- Jitter evidence captured before a bridge-only reset; user confirmed stable audio afterward. Cause remains unproven. No audio processing algorithm changed in this release.

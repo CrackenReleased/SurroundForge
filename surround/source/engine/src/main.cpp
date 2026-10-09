@@ -269,7 +269,7 @@ int main(int argc, char** argv)
   for (int i = 1; i < argc; ++i)
     if (std::string(argv[i]) == "--version" || std::string(argv[i]) == "-v")
     {
-      std::printf("virtual-ac3-encoder %s\n", VAC3_VERSION);
+      std::printf("SurroundForge %s\n", VAC3_VERSION);
       return 0;
     }
 
@@ -292,7 +292,7 @@ int main(int argc, char** argv)
     }
   }
   setvbuf(stdout, nullptr, _IONBF, 0); // unbuffered so logs aren't lost on abnormal exit
-  std::printf("virtual-ac3-encoder %s\n", VAC3_VERSION);
+  std::printf("SurroundForge %s\n", VAC3_VERSION);
 
   ComApartment com;
   if (!com.ok()) { std::fprintf(stderr, "CoInitializeEx failed\n"); return 1; }

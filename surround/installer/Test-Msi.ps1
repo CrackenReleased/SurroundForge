@@ -1,9 +1,9 @@
 [CmdletBinding()]
-param([switch]$InstallRoundTrip)
+param([switch]$InstallRoundTrip,[string]$UpgradeFromMsi='')
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
-$msi=Join-Path $root 'dist\Samsung-Optical-5.1-0.1.9-x64.msi'
-$validation=Join-Path $PSScriptRoot 'validation'
+$msi=Join-Path $root 'dist\SurroundForge-0.1.10-x64.msi'
+$validation=Join-Path $PSScriptRoot 'validation\0.1.10'
 $extract=Join-Path $validation 'extract'
 New-Item -ItemType Directory -Path $validation -Force | Out-Null
 function Assert($value,[string]$message){if(-not $value){throw $message}}
@@ -21,7 +21,19 @@ function Query([string]$sql) {
   while($record=$view.Fetch()){$rows+=$record.StringData(1)}
   [void]$view.Close();return $rows
 }
-Assert ((Query "SELECT Value FROM Property WHERE Property='ProductVersion'") -eq '0.1.9') 'MSI product version mismatch'
+Assert ((Query "SELECT Value FROM Property WHERE Property='ProductVersion'") -eq '0.1.10') 'MSI product version mismatch'
+Assert ((Query "SELECT Value FROM Property WHERE Property='ProductName'") -eq 'SurroundForge') 'MSI product name mismatch'
+Assert ((Query "SELECT Value FROM Property WHERE Property='UpgradeCode'") -eq '{5F84BC04-1D71-4E51-83D3-2832FCCF20F2}') 'Preserve MSI upgrade identity'
+foreach($directory in 'INSTALLFOLDER','AppMenu'){
+  Assert (((Query "SELECT DefaultDir FROM Directory WHERE Directory='$directory'") -split '\|')[-1] -eq 'SurroundForge') "Product directory identity mismatch: $directory"
+}
+function Startup-Fingerprint {
+  return ((Get-ChildItem -LiteralPath ([Environment]::GetFolderPath('Startup')) -Filter '*.lnk' -File |
+    Sort-Object FullName | ForEach-Object {$_.FullName+' '+(Get-FileHash -LiteralPath $_.FullName).Hash}) -join "`n")
+}
+foreach($identity in @(@('SetupShortcut','SurroundForge Setup'),@('StartShortcut','Start SurroundForge'),@('StopShortcut','Stop SurroundForge'))){
+  Assert (((Query ("SELECT Name FROM Shortcut WHERE Shortcut='"+$identity[0]+"'")) -split '\|')[-1] -eq $identity[1]) 'Installed shortcut identity mismatch'
+}
 Assert (-not (Query "SELECT Value FROM Property WHERE Property='ALLUSERS'")) 'Package must be per-user'
 $names=Query 'SELECT FileName FROM File'
 foreach($name in 'engine.exe','bridge_control.exe','Setup.ps1','Bridge.ps1','Uninstall.ps1','VBCABLE_Setup_x64.exe','C-Media.zip','vcruntime140.dll','msvcp140.dll') {
@@ -35,8 +47,8 @@ Assert $installedRoot 'Bridge missing after extraction'
 foreach($name in 'Bridge.ps1','Setup.ps1') {
   Assert ((Get-FileHash (Join-Path $installedRoot $name)).Hash -eq (Get-FileHash (Join-Path $root $name)).Hash) "Stale packaged source: $name"
 }
-& (Join-Path $installedRoot 'Runtime\engine.exe') --version
-Assert ($LASTEXITCODE -eq 0) 'Packaged engine/runtime dependency load failed'
+$engineVersion=& (Join-Path $installedRoot 'Runtime\engine.exe') --version
+Assert ($LASTEXITCODE -eq 0 -and $engineVersion -eq 'SurroundForge 0.1.10-local') 'Packaged engine/runtime version mismatch or dependency load failure'
 $devices=(& (Join-Path $installedRoot 'Runtime\bridge_control.exe') --devices-json) | ConvertFrom-Json
 Assert ($LASTEXITCODE -eq 0 -and $devices.Count -gt 0) 'Packaged controller/runtime dependency load failed'
 Get-ChildItem -LiteralPath (Join-Path $root 'vbcable') -File | ForEach-Object {
@@ -62,20 +74,53 @@ Write-Output 'PASS: MSI schema/version, per-user scope, no laptop state, package
 if($InstallRoundTrip) {
   $destination=Join-Path $validation 'installed'
   $before=Native-Defaults
-  $startup=Join-Path ([Environment]::GetFolderPath('Startup')) 'Samsung Optical 5.1.lnk'
-  $startupHash=if(Test-Path $startup){(Get-FileHash $startup).Hash}else{''}
+  $startupHash=Startup-Fingerprint
   $didInstall=$false
+  $didInstallPrevious=$false
+  $previousDestination=Join-Path $validation 'previous'
   try {
+    if($UpgradeFromMsi){
+      Assert (Test-Path -LiteralPath $UpgradeFromMsi) 'Previous MSI missing for upgrade test'
+      # Legacy packages did not remember a custom folder during major upgrade.
+      # Exercise their supported default-folder upgrade; exercise custom-folder
+      # removal with the new package below, without injecting INSTALLFOLDER.
+      $previousDatabase=$installer.OpenDatabase($UpgradeFromMsi,0)
+      $previousView=$previousDatabase.OpenView("SELECT DefaultDir FROM Directory WHERE Directory='INSTALLFOLDER'")
+      [void]$previousView.Execute();$previousFolder=($previousView.Fetch().StringData(1) -split '\|')[-1];[void]$previousView.Close()
+      $previousDestination=Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) $previousFolder
+      Assert (-not (Test-Path -LiteralPath $previousDestination)) 'Do not replace an existing previous-version folder during this test'
+      Msi-Run @('/i',('"'+$UpgradeFromMsi+'"'),'WIXUI_EXITDIALOGOPTIONALCHECKBOX=0') 'previous-install.log'
+      $didInstallPrevious=$true
+      Assert (Test-Path (Join-Path $previousDestination 'Runtime\engine.exe')) 'Previous version did not install'
+      Assert ((Native-Defaults) -eq $before) 'Previous install changed audio defaults'
+    }
     Msi-Run @('/i',('"'+$msi+'"'),('INSTALLFOLDER="'+$destination+'"'),'WIXUI_EXITDIALOGOPTIONALCHECKBOX=0') 'install.log'
     $didInstall=$true
     Assert (Test-Path (Join-Path $destination 'Runtime\engine.exe')) 'Install did not deploy runtime'
     Assert ((Native-Defaults) -eq $before) 'Silent MSI install changed audio defaults'
+    if($didInstallPrevious){
+      Assert (-not (Test-Path (Join-Path $previousDestination 'Runtime\engine.exe'))) 'Upgrade left the previous product runtime installed'
+      Write-Output 'PASS: previous product upgraded to the renamed product without duplicate runtime'
+    }
   } finally {
-    if($didInstall){Msi-Run @('/x',('"'+$msi+'"'),('INSTALLFOLDER="'+$destination+'"')) 'uninstall.log'}
+    if($didInstall){
+      try {Msi-Run @('/x',('"'+$msi+'"')) 'uninstall.log'}
+      catch {
+        $cleanupFailure=$_
+        # Reproducer cleanup only: remove the test-owned custom installation even
+        # if normal uninstall forgot its folder, then report the original failure.
+        Copy-Item -LiteralPath (Join-Path $validation 'uninstall.log') -Destination (Join-Path $validation 'uninstall-failed.log') -Force
+        Msi-Run @('/x',('"'+$msi+'"'),('INSTALLFOLDER="'+$destination+'"')) 'uninstall-fixture-cleanup.log'
+        throw $cleanupFailure
+      }
+    }
+    if($didInstallPrevious -and (Test-Path (Join-Path $previousDestination 'Runtime\engine.exe'))){
+      Msi-Run @('/x',('"'+$UpgradeFromMsi+'"'),('INSTALLFOLDER="'+$previousDestination+'"')) 'previous-uninstall.log'
+    }
   }
   Assert (-not (Test-Path (Join-Path $destination 'Runtime\engine.exe'))) 'Uninstall left MSI-owned runtime'
   Assert ((Native-Defaults) -eq $before) 'Uninstall changed another bridge defaults'
-  $afterHash=if(Test-Path $startup){(Get-FileHash $startup).Hash}else{''}
+  $afterHash=Startup-Fingerprint
   Assert ($afterHash -eq $startupHash) 'Uninstall changed another installation startup shortcut'
   Write-Output 'PASS: actual MSI install/uninstall; existing audio defaults and startup shortcut preserved'
 }

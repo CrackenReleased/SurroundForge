@@ -21,6 +21,7 @@
 /surround/installer/*
 !/surround/installer/*.ps1
 !/surround/installer/*.txt
+!/surround/installer/License.rtf
 
 /surround/source/*
 !/surround/source/LICENSE

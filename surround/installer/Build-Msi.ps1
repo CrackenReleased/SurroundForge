@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param()
+param([string]$ReleaseDirectory='')
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 $stage=Join-Path $PSScriptRoot 'payload'
@@ -23,7 +23,7 @@ Copy-Payload (Join-Path $PSScriptRoot 'Third Party Notices.txt') 'Third Party No
 Copy-Payload (Join-Path $root 'source\LICENSE') 'Licenses\Engine-MIT.txt'
 Copy-Payload (Join-Path $PSScriptRoot 'LGPL-2.1.txt') 'Licenses\FFmpeg-LGPL-2.1.txt'
 Copy-Payload (Join-Path $PSScriptRoot 'FFmpeg-Version.txt') 'Licenses\FFmpeg-Version.txt'
-$release=Join-Path $root 'source\engine\build\Release'
+$release=if($ReleaseDirectory){[IO.Path]::GetFullPath($ReleaseDirectory)}else{Join-Path $root 'source\engine\build\Release'}
 foreach($name in 'engine.exe','bridge_control.exe'){Copy-Payload (Join-Path $release $name) ('Runtime\'+$name)}
 Get-ChildItem -LiteralPath (Join-Path $root 'source\third_party\ffmpeg\bin') -Filter '*.dll' | ForEach-Object {Copy-Payload $_.FullName ('Runtime\'+$_.Name)}
 $crt=Get-ChildItem 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Redist\MSVC\*\x64\Microsoft.VC143.CRT' -Directory | Sort-Object FullName -Descending | Select-Object -First 1
@@ -63,46 +63,47 @@ foreach($file in $files) {
   $digest=[Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($relative.ToLowerInvariant()))
   $guid=New-Object Guid (,[byte[]]$digest[0..15])
   $id='File'+$guid.ToString('N')
-  [void]$componentXml.AppendLine('<DirectoryRef Id="'+$directories[$folder]+'"><Component Id="Cmp'+$guid.ToString('N')+'" Guid="'+$guid.ToString()+'" Win64="yes"><File Id="'+$id+'" Source="'+(Xml-Escape $file.FullName)+'" Name="'+(Xml-Escape $file.Name)+'" /><RegistryValue Root="HKCU" Key="Software\CrackenReleased\SamsungOptical51\Files" Name="'+$id+'" Type="integer" Value="1" KeyPath="yes" /></Component></DirectoryRef>')
+  [void]$componentXml.AppendLine('<DirectoryRef Id="'+$directories[$folder]+'"><Component Id="Cmp'+$guid.ToString('N')+'" Guid="'+$guid.ToString()+'" Win64="yes"><File Id="'+$id+'" Source="'+(Xml-Escape $file.FullName)+'" Name="'+(Xml-Escape $file.Name)+'" /><RegistryValue Root="HKCU" Key="Software\CrackenReleased\SurroundForge\Files" Name="'+$id+'" Type="integer" Value="1" KeyPath="yes" /></Component></DirectoryRef>')
   [void]$featureXml.AppendLine('<ComponentRef Id="Cmp'+$guid.ToString('N')+'" />')
 }
 $removeXml=($directories.Values | ForEach-Object {'<RemoveFolder Id="Remove_'+$_+'" Directory="'+$_+'" On="uninstall" />'}) -join ''
 $source=@'
 <?xml version="1.0" encoding="utf-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-<Product Id="*" Name="Samsung Optical 5.1" Language="1033" Version="0.1.9" Manufacturer="CrackenReleased" UpgradeCode="5F84BC04-1D71-4E51-83D3-2832FCCF20F2">
+<Product Id="*" Name="SurroundForge" Language="1033" Version="0.1.10" Manufacturer="CrackenReleased" UpgradeCode="5F84BC04-1D71-4E51-83D3-2832FCCF20F2">
 <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser" Platform="x64" Description="Real-time optical 5.1 audio with Windows volume and mute" />
-<MajorUpgrade DowngradeErrorMessage="A newer version of Samsung Optical 5.1 is already installed." />
+<MajorUpgrade DowngradeErrorMessage="A newer version of SurroundForge is already installed." />
 <MediaTemplate EmbedCab="yes" CompressionLevel="medium" />
 <Property Id="WINDOWSREALBUILD"><RegistrySearch Id="ActualWindowsBuild" Root="HKLM" Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion" Name="CurrentBuildNumber" Type="raw" Win64="yes" /></Property>
-<Condition Message="Samsung Optical 5.1 requires 64-bit Windows 10 or 11.">VersionNT64 AND WINDOWSREALBUILD &gt;= 10240</Condition>
+<Property Id="INSTALLFOLDER"><RegistrySearch Id="SavedInstallFolder" Root="HKCU" Key="Software\CrackenReleased\SurroundForge" Name="InstallFolder" Type="raw" Win64="yes" /></Property>
+<Condition Message="SurroundForge requires 64-bit Windows 10 or 11.">VersionNT64 AND WINDOWSREALBUILD &gt;= 10240</Condition>
 <Property Id="MSIRESTARTMANAGERCONTROL" Value="Disable" />
-<Directory Id="TARGETDIR" Name="SourceDir"><Directory Id="LocalAppDataFolder"><Directory Id="INSTALLFOLDER" Name="Samsung Optical 5.1" /></Directory><Directory Id="ProgramMenuFolder"><Directory Id="AppMenu" Name="Samsung Optical 5.1" /></Directory></Directory>
+<Directory Id="TARGETDIR" Name="SourceDir"><Directory Id="LocalAppDataFolder"><Directory Id="INSTALLFOLDER" Name="SurroundForge" /></Directory><Directory Id="ProgramMenuFolder"><Directory Id="AppMenu" Name="SurroundForge" /></Directory></Directory>
 DIRECTORIES
 COMPONENTS
 <DirectoryRef Id="AppMenu"><Component Id="MenuShortcuts" Guid="*" Win64="yes">
-<Shortcut Id="SetupShortcut" Name="Samsung 5.1 Setup" Target="[SystemFolder]WindowsPowerShell\v1.0\powershell.exe" Arguments="-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]Setup.ps1&quot;" WorkingDirectory="INSTALLFOLDER" />
-<Shortcut Id="StartShortcut" Name="Start Samsung 5.1" Target="[SystemFolder]WindowsPowerShell\v1.0\powershell.exe" Arguments="-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]Bridge.ps1&quot; -Action Start" WorkingDirectory="INSTALLFOLDER" />
-<Shortcut Id="StopShortcut" Name="Stop Samsung 5.1" Target="[SystemFolder]WindowsPowerShell\v1.0\powershell.exe" Arguments="-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]Bridge.ps1&quot; -Action Stop" WorkingDirectory="INSTALLFOLDER" />
-<RemoveFolder Id="RemoveAppMenu" On="uninstall" />REMOVEFOLDERS<RegistryValue Root="HKCU" Key="Software\CrackenReleased\SamsungOptical51" Name="Installed" Type="integer" Value="1" KeyPath="yes" /></Component></DirectoryRef>
-<Feature Id="Complete" Title="Samsung Optical 5.1" Level="1">FEATURES<ComponentRef Id="MenuShortcuts" /></Feature>
+<Shortcut Id="SetupShortcut" Name="SurroundForge Setup" Target="[SystemFolder]WindowsPowerShell\v1.0\powershell.exe" Arguments="-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]Setup.ps1&quot;" WorkingDirectory="INSTALLFOLDER" />
+<Shortcut Id="StartShortcut" Name="Start SurroundForge" Target="[SystemFolder]WindowsPowerShell\v1.0\powershell.exe" Arguments="-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]Bridge.ps1&quot; -Action Start" WorkingDirectory="INSTALLFOLDER" />
+<Shortcut Id="StopShortcut" Name="Stop SurroundForge" Target="[SystemFolder]WindowsPowerShell\v1.0\powershell.exe" Arguments="-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]Bridge.ps1&quot; -Action Stop" WorkingDirectory="INSTALLFOLDER" />
+<RemoveFolder Id="RemoveAppMenu" On="uninstall" />REMOVEFOLDERS<RegistryValue Root="HKCU" Key="Software\CrackenReleased\SurroundForge" Name="Installed" Type="integer" Value="1" KeyPath="yes" /><RegistryValue Root="HKCU" Key="Software\CrackenReleased\SurroundForge" Name="InstallFolder" Type="string" Value="[INSTALLFOLDER]" /></Component></DirectoryRef>
+<Feature Id="Complete" Title="SurroundForge" Level="1">FEATURES<ComponentRef Id="MenuShortcuts" /></Feature>
 <CustomAction Id="LaunchSetup" Directory="INSTALLFOLDER" ExeCommand="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]Setup.ps1&quot;" Execute="immediate" Return="asyncNoWait" Impersonate="yes" />
 <CustomAction Id="CleanupBridge" Directory="INSTALLFOLDER" ExeCommand="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]Uninstall.ps1&quot;" Execute="immediate" Return="check" Impersonate="yes" />
 <InstallExecuteSequence><Custom Action="CleanupBridge" Before="RemoveFiles">Installed AND REMOVE~="ALL"</Custom></InstallExecuteSequence>
-<Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Open Samsung 5.1 Setup" /><Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+<Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Open SurroundForge Setup" /><Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
 <WixVariable Id="WixUILicenseRtf" Value="LICENSEPATH" /><UIRef Id="WixUI_Minimal" />
 <UI><Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchSetup">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed</Publish></UI>
 </Product></Wix>
 '@
 $source=$source.Replace('DIRECTORIES',$directoryXml.ToString()).Replace('COMPONENTS',$componentXml.ToString()).Replace('FEATURES',$featureXml.ToString()).Replace('REMOVEFOLDERS',$removeXml).Replace('LICENSEPATH',(Xml-Escape (Join-Path $PSScriptRoot 'License.rtf'))).Replace('[SystemFolder]WindowsPowerShell','[System64Folder]WindowsPowerShell')
-$wxs=Join-Path $work 'SamsungOptical51.wxs'
+$wxs=Join-Path $work 'SurroundForge.wxs'
 [IO.File]::WriteAllText($wxs,$source)
-& (Join-Path $wix 'candle.exe') -nologo -arch x64 -out (Join-Path $work 'SamsungOptical51.wixobj') $wxs
+& (Join-Path $wix 'candle.exe') -nologo -arch x64 -out (Join-Path $work 'SurroundForge.wixobj') $wxs
 if($LASTEXITCODE){throw 'MSI compilation failed.'}
-$msi=Join-Path $dist 'Samsung-Optical-5.1-0.1.9-x64.msi'
+$msi=Join-Path $dist 'SurroundForge-0.1.10-x64.msi'
 # ICE91 warns about per-machine use of user-profile files. This MSI is explicitly
 # per-user and Test-Msi asserts ALLUSERS absent; keep all other ICE validations.
-& (Join-Path $wix 'light.exe') -nologo -sice:ICE91 -ext (Join-Path $wix 'WixUIExtension.dll') -out $msi (Join-Path $work 'SamsungOptical51.wixobj')
+& (Join-Path $wix 'light.exe') -nologo -sice:ICE91 -ext (Join-Path $wix 'WixUIExtension.dll') -out $msi (Join-Path $work 'SurroundForge.wixobj')
 if($LASTEXITCODE){throw 'MSI linking/validation failed.'}
 $hash=Get-FileHash -LiteralPath $msi -Algorithm SHA256
 [IO.File]::WriteAllText(($msi+'.sha256'),$hash.Hash+'  '+[IO.Path]::GetFileName($msi)+[Environment]::NewLine)

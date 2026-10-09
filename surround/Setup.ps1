@@ -1,4 +1,4 @@
-<# First-run setup for Samsung optical surround. Windows PowerShell 5.1. #>
+<# First-run setup for SurroundForge. Windows PowerShell 5.1. #>
 [CmdletBinding()]
 param([switch]$NoUi)
 $ErrorActionPreference='Stop'
@@ -9,7 +9,7 @@ function Get-SetupRuntime {
   if(Test-Path -LiteralPath $installed){return $installed}
   $development=Join-Path $script:SetupRoot 'source\engine\build\Release\bridge_control.exe'
   if(Test-Path -LiteralPath $development){return $development}
-  throw 'The surround audio component is missing. Please reinstall Samsung Optical 5.1.'
+  throw 'The surround audio component is missing. Please reinstall SurroundForge.'
 }
 function Invoke-SetupControl([string[]]$Arguments) {
   $controller=Get-SetupRuntime
@@ -65,7 +65,7 @@ function Test-SetupStartupOwner([string]$Arguments,[string]$Root) {
   catch {return $false}
 }
 function Get-SetupStartupChoice {
-  $path=Join-Path ([Environment]::GetFolderPath('Startup')) 'Samsung Optical 5.1.lnk'
+  $path=Join-Path ([Environment]::GetFolderPath('Startup')) 'SurroundForge.lnk'
   if(-not (Test-Path -LiteralPath $path)){return $true}
   try {
     $shell=New-Object -ComObject WScript.Shell
@@ -124,7 +124,7 @@ function Get-SetupCmediaInstaller {
   $path=Join-Path $allowed 'setup.exe'
   if(Test-Path -LiteralPath $path){return $path}
   $archive=Join-Path $script:SetupRoot 'Drivers\C-Media.zip'
-  if(-not (Test-Path -LiteralPath $archive)){throw 'The USB optical driver package is missing. Please reinstall Samsung Optical 5.1.'}
+  if(-not (Test-Path -LiteralPath $archive)){throw 'The USB optical driver package is missing. Please reinstall SurroundForge.'}
   # A prior interrupted extraction may have left only part of the vendor package.
   # Cleanup is permitted only at this exact package-owned directory.
   $target=[IO.Path]::GetFullPath($allowed)
@@ -147,7 +147,7 @@ function Show-SetupUi {
   Add-Type -AssemblyName System.Drawing
   [Windows.Forms.Application]::EnableVisualStyles()
   $form=New-Object Windows.Forms.Form
-  $form.Text='Samsung Optical 5.1 - Setup';$form.ClientSize=New-Object Drawing.Size(736,590)
+  $form.Text='SurroundForge - Setup';$form.ClientSize=New-Object Drawing.Size(736,590)
   $form.StartPosition='CenterScreen';$form.FormBorderStyle='FixedDialog';$form.MaximizeBox=$false
   $form.Font=New-Object Drawing.Font('Segoe UI',10);$form.BackColor=[Drawing.Color]::White
   function Add-Label([string]$Text,[int]$Y,[int]$Height) {
@@ -157,7 +157,7 @@ function Show-SetupUi {
   $title=Add-Label 'Set up your surround sound' 22 38
   $title.Font=New-Object Drawing.Font('Segoe UI',19,[Drawing.FontStyle]::Bold)
   $title.ForeColor=[Drawing.Color]::FromArgb(22,52,86)
-  $null=Add-Label 'Connect the USB optical adapter to your Samsung system, then select its output.' 68 40
+  $null=Add-Label 'Enable real-time 5.1 through your USB optical adapter. Select its output below.' 68 40
   $drivers=Add-Label '1. Audio devices' 120 26;$drivers.Font=New-Object Drawing.Font('Segoe UI',11,[Drawing.FontStyle]::Bold)
   $driverStatus=Add-Label 'Checking your audio devices...' 153 52
   $vbButton=New-Object Windows.Forms.Button;$vbButton.Text='Install VB-CABLE';$vbButton.Location=New-Object Drawing.Point(24,211);$vbButton.Size=New-Object Drawing.Size(180,34)
@@ -202,7 +202,7 @@ function Show-SetupUi {
       $ui.Cm.Enabled=(-not $busy -and $hardware.Attached -and -not $hardware.Installed)
       $ui.Configure.Enabled=(-not $busy -and [bool]$selection.Input -and $ui.Outputs.SelectedIndex -ge 0)
       $hasOpticalUsb=@($selection.Outputs | Where-Object {$_.isSpdif -and $_.name -match '(?i)USB'}).Count -gt 0
-      $ui.Help.Text=if($hardware.Attached -and -not $hasOpticalUsb){'In Xear Audio Center: right-click Speakers, open Speaker Settings, then choose SPDIF Out. On the Samsung, select D.IN. Refresh this window afterward.'}else{'Keep the Samsung on D.IN. Your normal Windows volume control will adjust listening volume.'}
+      $ui.Help.Text=if($hardware.Attached -and -not $hasOpticalUsb){'In Xear Audio Center: right-click Speakers, open Speaker Settings, then choose SPDIF Out. Select the optical input on your receiver. Refresh this window afterward.'}else{'Select the optical input on your receiver. Your normal Windows volume control will adjust listening volume.'}
       if($hardware.ErrorText){$ui.Status.Text=$hardware.ErrorText}
     } catch {$ui.Status.Text=$_.Exception.Message;$ui.Configure.Enabled=$false;$ui.Vb.Enabled=$false;$ui.Cm.Enabled=$false}
   }
@@ -220,7 +220,7 @@ function Show-SetupUi {
         if($hardware.Installed){throw 'The USB optical driver is already installed. Use Xear Audio Center to select SPDIF Out.'}
         $path=Get-SetupCmediaInstaller
       }
-      if(-not (Test-Path -LiteralPath $path)){throw 'This driver installer is missing. Please reinstall Samsung Optical 5.1.'}
+      if(-not (Test-Path -LiteralPath $path)){throw 'This driver installer is missing. Please reinstall SurroundForge.'}
       $existing=Get-Process -ErrorAction SilentlyContinue | Where-Object {$_.Path -eq $path} | Select-Object -First 1
       if($existing){throw 'This driver installer is already open. Complete it before continuing.'}
       $ui.Installer=Start-Process -FilePath $path -WorkingDirectory (Split-Path $path) -Verb RunAs -WindowStyle Normal -PassThru

@@ -2,7 +2,7 @@
 
 **Forge real PC surround sound through an ordinary USB optical adapter.**
 
-Working release: **v0.1.9**. Gaming surround was confirmed by the user on the original Samsung setup after the reboot speaker-layout repair.
+Working release: **v0.1.10**. Gaming surround was confirmed by the user through the USB optical adapter after the reboot speaker-layout repair.
 
 ```text
 Game / Windows audio
@@ -13,21 +13,21 @@ Game / Windows audio
     → receiver → 5.1 speakers
 ```
 
-The tested setup uses a C-Media CM6206 USB adapter and Samsung HT-D550 on its D.IN input. SurroundForge uses the existing signed vendor drivers and a native userspace encoder. Ordinary stereo sources stay stereo; it does not fake game surround by enabling stereo upmixing.
+SurroundForge enables a USB optical adapter to carry real-time compressed 5.1 from games and Windows audio. It uses signed audio drivers and a native userspace encoder. The connected receiver must decode AC3 (Dolby Digital) over its optical input; it does not need to be a particular brand. The adapter must support encoded S/PDIF output. The original USB hardware was verified; other adapter combinations have not been independently tested. Ordinary stereo sources stay stereo; it does not fake game surround by enabling stereo upmixing.
 
 ## Install and use
 
-The locally built installer is `surround/dist/Samsung-Optical-5.1-0.1.9-x64.msi`. MSI files are release artifacts and are excluded from Git.
+The locally built installer is `surround/dist/SurroundForge-0.1.10-x64.msi`. MSI files are release artifacts and are excluded from Git.
 
-1. Install on Windows 10/11 x64 and open **Samsung 5.1 Setup**.
+1. Install on Windows 10/11 x64 and open **SurroundForge Setup**.
 2. Connect the adapter's optical OUT to the receiver's optical IN; select the receiver's optical input.
 3. Install missing vendor drivers using Setup. Restart if requested. In C-Media/Xear settings, enable **SPDIF Out**.
-4. Select the physical optical output, then **Configure and Start**. Enable startup if desired.
+4. Select the physical optical output, then **Save and start surround**. Enable startup if desired.
 5. Use 5.1/home-theater settings in games. Windows volume and mute control listening volume.
 
 The driver's **CABLE In 16ch** name describes its capacity. SurroundForge configures it to **six channels at 48 kHz**, with assigned FL/FR/FC/LFE/BL/BR speakers. Startup repairs the speaker mask if Windows loses it after reboot.
 
-**Stop 5.1** restores the previous Windows output defaults. The launcher identifies its own encoder by executable path, PID and start time, and preserves a separately selected communications headset.
+**Stop SurroundForge** restores the previous Windows output defaults. The launcher identifies its own encoder by executable path, PID and start time, and preserves a separately selected communications headset.
 
 ## Source map
 
