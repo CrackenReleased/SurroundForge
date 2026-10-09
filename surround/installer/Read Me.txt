@@ -1,0 +1,20 @@
+Samsung Optical 5.1 - v0.1.9
+
+1. Install this MSI on 64-bit Windows 10 or 11. Leave "Open Samsung 5.1 Setup" selected.
+2. Connect your USB optical adapter. Connect its optical OUT to Samsung DIGITAL AUDIO IN; select D.IN on Samsung.
+3. Setup detects installed audio devices. Use its driver buttons only for missing drivers. Complete the vendor installer and restart Windows if it requests one. Reopen Samsung 5.1 Setup from Start after restarting.
+4. For the C-Media adapter, open Xear Audio Center and select SPDIF Out in Speaker Settings. Refresh the setup device list and select that physical output.
+5. Click Configure and Start. The virtual input is configured to 5.1, 48 kHz. Enable startup to start the bridge after sign-in.
+6. Use 5.1/home-theater audio in games. Windows volume and mute control the Samsung audio. Ordinary stereo material stays stereo.
+
+Start menu contains Setup, Start and Stop. Stop restores your previous Windows audio defaults. Uninstall stops this installed bridge and removes only its own startup shortcut; shared vendor drivers and your saved settings are retained.
+
+Startup verifies six channels AND the 5.1 speaker assignments, repairing assignments Windows can lose on reboot. "16ch" is the driver's device name; the configured gaming format is six channels.
+
+Diagnostics: channel-activity.csv stores six raw source peak values every five seconds, including while Windows output is muted. It records no audio. The current and previous CSV are limited to approximately 2 MiB each. Bridge.ps1 -Action Diagnostics saves settings, bridge logs and relevant Windows events to a timestamped diagnostics folder. Open saved .evtx files in Windows Event Viewer. Disabled event channels are not enabled. Bundles are local troubleshooting records; keep the latest before/after pair and remove older bundles when the issue is resolved.
+
+The MSI includes the native encoder, its runtime dependencies, and the original signed vendor installers. It does not copy this laptop's device IDs, logs or live process state. Configuration uses the destination PC's devices. Administrator approval is needed only for vendor driver installations. No internet download is required to install/use the package.
+
+VB-CABLE is VB-Audio donationware. Origin and donation/license information: https://vb-audio.com/Cable/ and https://vb-audio.com/Services/licensing.htm . Vendor installers retain their own license terms.
+
+This locally built MSI is not Authenticode-signed. The included vendor drivers retain their publisher signatures. No security settings or driver-signing settings are changed.

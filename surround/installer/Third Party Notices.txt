@@ -1,0 +1,17 @@
+Samsung Optical 5.1 v0.1.8
+
+Native engine adapted from strepto42/virtual-ac3-encoder, upstream v0.1.5 commit 3be5ba878f9689b0257c03ff4759d19cdf552cb5. MIT license included in Licenses/Engine-MIT.txt. Source and local modifications are retained in this project's surround/source/engine tree.
+https://github.com/strepto42/virtual-ac3-encoder
+
+FFmpeg dynamically linked shared LGPL build: ffmpeg-master-latest-win64-lgpl-shared.zip, downloaded 2026-10-09 from BtbN/FFmpeg-Builds. Libraries may be replaced independently. LGPL-2.1-or-later text included in Licenses/FFmpeg-LGPL-2.1.txt. Build version/provenance and source links are provided in Licenses/FFmpeg-Version.txt.
+https://ffmpeg.org/legal.html
+https://github.com/BtbN/FFmpeg-Builds
+
+VB-CABLE by VB-Audio Software, original package45 distributed unchanged with its readme/license. VB-CABLE is donationware; donations and license participation are welcome. The setup screen identifies the author and links to the donation/license page. Its bundled official installer handles the signed driver.
+https://vb-audio.com/Cable/
+https://vb-audio.com/Services/licensing.htm
+
+C-Media CM6206 original Windows 10 installer from StarTech, retained unmodified for this user's compatible USB adapter VID_0D8C PID_0102. Publisher driver catalog signature: C-MEDIA ELECTRONICS INC. Vendor installer terms apply. This is a private migration package, not an offer to redistribute the C-Media software commercially.
+https://media.startech.com/downloads/raw/%5BCMedia%20CM6206%5D%20Windows%20USB%207.1%20Audio%20Adapter.zip
+
+Microsoft Visual C++ x64 runtime DLLs redistributed app-locally from the installed Visual Studio Build Tools redist directory. Microsoft redistributable license applies. Windows UCRT supplied by Windows 10/11.
