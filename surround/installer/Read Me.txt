@@ -1,4 +1,4 @@
-SurroundForge - v0.1.10
+SurroundForge - v0.1.11
 
 1. Install this MSI on 64-bit Windows 10 or 11. Leave "Open SurroundForge Setup" selected.
 2. Connect your USB optical adapter. Connect its optical OUT to your receiver's optical IN; select its optical input.
@@ -13,8 +13,10 @@ Startup verifies six channels AND the 5.1 speaker assignments, repairing assignm
 
 Diagnostics: channel-activity.csv stores six raw source peak values every five seconds, including while Windows output is muted. It records no audio. The current and previous CSV are limited to approximately 2 MiB each. Bridge.ps1 -Action Diagnostics saves settings, bridge logs and relevant Windows events to a timestamped diagnostics folder. Open saved .evtx files in Windows Event Viewer. Disabled event channels are not enabled. Bundles are local troubleshooting records; keep the latest before/after pair and remove older bundles when the issue is resolved.
 
-The MSI includes the native encoder, its runtime dependencies, and the original signed vendor installers. It does not copy this laptop's device IDs, logs or live process state. Configuration uses the destination PC's devices. Administrator approval is needed only for vendor driver installations. No internet download is required to install/use the package.
+The MSI includes the native encoder, its runtime dependencies, and the original vendor installers. It does not copy this laptop's device IDs, logs or live process state. Configuration uses the destination PC's devices. Administrator approval is needed only for vendor driver installations. No internet download is required to install/use this private development package.
 
 VB-CABLE is VB-Audio donationware. Origin and donation/license information: https://vb-audio.com/Cable/ and https://vb-audio.com/Services/licensing.htm . Vendor installers retain their own license terms.
 
-This locally built MSI is not Authenticode-signed. The included vendor drivers retain their publisher signatures. No security settings or driver-signing settings are changed.
+This development MSI is unsigned and is not a public release. The included vendor drivers retain their publisher signatures. No security settings or driver-signing settings are changed.
+
+The original VB-CABLE installer has a valid publisher signature. The original C-Media setup.exe wrapper is unsigned; its driver catalogs have separate signatures. This distinction is why this bundled development package must not be represented as an authenticated public release.

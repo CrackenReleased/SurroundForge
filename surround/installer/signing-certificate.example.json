@@ -1,0 +1,8 @@
+{
+  "Provider": "CertificateStore",
+  "SignToolPath": "C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x64\\signtool.exe",
+  "TimestampUrl": "https://timestamp.digicert.com",
+  "TrustedRootThumbprints": ["REPLACE_WITH_OFFICIALLY_VERIFIED_PUBLIC_CA_ROOT_THUMBPRINT"],
+  "CertificateThumbprint": "REPLACE_WITH_COMPANY_CODE_SIGNING_CERTIFICATE_THUMBPRINT",
+  "StoreLocation": "CurrentUser"
+}

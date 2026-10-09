@@ -1,11 +1,16 @@
 [CmdletBinding()]
-param([string]$ReleaseDirectory='')
+param([string]$ReleaseDirectory='', [string]$SigningConfiguration='', [switch]$DevelopmentUnsigned)
 $ErrorActionPreference='Stop'
+. (Join-Path $PSScriptRoot 'Signing.ps1')
+# Fail before touching staging or existing release artifacts.
+if($DevelopmentUnsigned -and $SigningConfiguration){throw 'Choose signed release or unsigned development, not both.'}
+$policy=if(-not $DevelopmentUnsigned){Read-SigningConfiguration $SigningConfiguration}else{$null}
 $root=Split-Path $PSScriptRoot -Parent
 $stage=Join-Path $PSScriptRoot 'payload'
 $work=Join-Path $PSScriptRoot 'build'
 $wix=Join-Path $PSScriptRoot 'toolchain\wix'
-$dist=Join-Path $root 'dist'
+$dist=if($DevelopmentUnsigned){Join-Path $work 'development'}else{Join-Path $root 'dist'}
+$script:SigningLog=Join-Path $work 'signing.log'
 if(Test-Path -LiteralPath $stage) {
   if([IO.Path]::GetFullPath($stage) -ne [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'payload'))){throw 'Unsafe staging path'}
   Remove-Item -LiteralPath $stage -Recurse -Force
@@ -37,6 +42,29 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $cmZip=Join-Path $stage 'Drivers\C-Media.zip'
 New-Item -ItemType Directory -Path (Split-Path $cmZip -Parent) -Force | Out-Null
 [IO.Compression.ZipFile]::CreateFromDirectory((Join-Path (Split-Path $root -Parent) 'package\WIN10'),$cmZip,[IO.Compression.CompressionLevel]::Optimal,$false)
+$signatureRecords=@()
+if($policy){
+  [IO.File]::WriteAllText($script:SigningLog,'')
+  # A signed driver catalog does not authenticate its installer wrapper. Never
+  # re-sign an unsigned vendor installer as if it were our own software.
+  Test-VendorInstallerSignature -Path (Join-Path $root 'vbcable\VBCABLE_Setup_x64.exe') -Policy $policy
+  Test-VendorInstallerSignature -Path (Join-Path (Split-Path $root -Parent) 'package\WIN10\setup.exe') -Policy $policy
+  # Sign only staging copies. Preserve vendor drivers and Microsoft DLL signatures.
+  foreach($file in Get-ChildItem -LiteralPath $stage -Filter '*.ps1' -File){
+    $signatureRecords+=Invoke-ReleaseSigning -Path $file.FullName -Policy $policy
+  }
+  foreach($file in Get-ChildItem -LiteralPath (Join-Path $stage 'Runtime') -File){
+    $vendorSignature=Get-AuthenticodeSignature -LiteralPath $file.FullName
+    if($file.Name -match '^(msvcp|vcruntime|concrt)' ){
+      if($vendorSignature.Status -ne 'Valid' -or $vendorSignature.SignerCertificate.GetNameInfo([Security.Cryptography.X509Certificates.X509NameType]::SimpleName,$false) -ne 'Microsoft Corporation'){throw "Invalid Microsoft runtime signature: $($file.Name)"}
+      Invoke-SigningTool $policy.SignToolPath @('verify','/pa','/all','/v',$file.FullName)
+      $signatureRecords+=[pscustomobject]@{File=$file.Name;SHA256=(Get-FileHash $file.FullName).Hash;Publisher='Microsoft Corporation';Status='Valid'}
+    } else {$signatureRecords+=Invoke-ReleaseSigning -Path $file.FullName -Policy $policy}
+  }
+  $readme=Join-Path $stage 'Read Me.txt'
+  $text=[IO.File]::ReadAllText($readme).Replace('This development MSI is unsigned and is not a public release.','This MSI and the SurroundForge executable components are Authenticode-signed by Cracken Released, LLC and timestamped. Verify the publisher before installation.')
+  [IO.File]::WriteAllText($readme,$text)
+}
 function Xml-Escape([string]$value){return [Security.SecurityElement]::Escape($value)}
 $files=Get-ChildItem -LiteralPath $stage -Recurse -File | Sort-Object FullName
 $directories=@{''='INSTALLFOLDER'}
@@ -70,7 +98,7 @@ $removeXml=($directories.Values | ForEach-Object {'<RemoveFolder Id="Remove_'+$_
 $source=@'
 <?xml version="1.0" encoding="utf-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-<Product Id="*" Name="SurroundForge" Language="1033" Version="0.1.10" Manufacturer="CrackenReleased" UpgradeCode="5F84BC04-1D71-4E51-83D3-2832FCCF20F2">
+<Product Id="*" Name="SurroundForge" Language="1033" Version="0.1.11" Manufacturer="Cracken Released, LLC" UpgradeCode="5F84BC04-1D71-4E51-83D3-2832FCCF20F2">
 <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser" Platform="x64" Description="Real-time optical 5.1 audio with Windows volume and mute" />
 <MajorUpgrade DowngradeErrorMessage="A newer version of SurroundForge is already installed." />
 <MediaTemplate EmbedCab="yes" CompressionLevel="medium" />
@@ -100,11 +128,29 @@ $wxs=Join-Path $work 'SurroundForge.wxs'
 [IO.File]::WriteAllText($wxs,$source)
 & (Join-Path $wix 'candle.exe') -nologo -arch x64 -out (Join-Path $work 'SurroundForge.wixobj') $wxs
 if($LASTEXITCODE){throw 'MSI compilation failed.'}
-$msi=Join-Path $dist 'SurroundForge-0.1.10-x64.msi'
+$msi=Join-Path $work 'SurroundForge-0.1.11-x64.msi'
 # ICE91 warns about per-machine use of user-profile files. This MSI is explicitly
 # per-user and Test-Msi asserts ALLUSERS absent; keep all other ICE validations.
 & (Join-Path $wix 'light.exe') -nologo -sice:ICE91 -ext (Join-Path $wix 'WixUIExtension.dll') -out $msi (Join-Path $work 'SurroundForge.wixobj')
 if($LASTEXITCODE){throw 'MSI linking/validation failed.'}
+if($policy){$signatureRecords+=Invoke-ReleaseSigning -Path $msi -Policy $policy}
+# A signing failure leaves only a private build artifact, never a release MSI.
+$outputName=if($DevelopmentUnsigned){'SurroundForge-0.1.11-x64-UNSIGNED-DEVELOPMENT.msi'}else{'SurroundForge-0.1.11-x64.msi'}
+$published=Join-Path $dist $outputName
+if((Test-Path -LiteralPath $published) -and -not $DevelopmentUnsigned){throw "Refusing to overwrite an existing release artifact: $published"}
+$pending=$published+'.pending'
+if(Test-Path -LiteralPath $pending){throw "An interrupted publication needs review: $pending"}
+if($policy){
+  [IO.File]::WriteAllText(($msi+'.signatures.json'),($signatureRecords | ConvertTo-Json -Depth 5))
+}
+try {
+  Copy-Item -LiteralPath $msi -Destination $pending
+  if((Get-FileHash $pending).Hash -ne (Get-FileHash $msi).Hash){throw 'Published copy differs from verified MSI.'}
+  if($DevelopmentUnsigned){Move-Item -LiteralPath $pending -Destination $published -Force}
+  else {Move-Item -LiteralPath $pending -Destination $published}
+} finally {if(Test-Path -LiteralPath $pending){Remove-Item -LiteralPath $pending}}
+if($policy){Copy-Item -LiteralPath ($msi+'.signatures.json') -Destination ($published+'.signatures.json')}
+$msi=$published
 $hash=Get-FileHash -LiteralPath $msi -Algorithm SHA256
 [IO.File]::WriteAllText(($msi+'.sha256'),$hash.Hash+'  '+[IO.Path]::GetFileName($msi)+[Environment]::NewLine)
 Write-Output "Built $msi ($number payload files). SHA256: $($hash.Hash)"

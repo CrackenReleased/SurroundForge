@@ -38,3 +38,11 @@
 - Support a separate package build so the working audio engine can remain running during games. Retain dependency licenses and attribution.
 - Remember custom installation folders so normal removal can find and stop the correct installed bridge; pin this with an actual install/uninstall regression.
 - Jitter evidence captured before a bridge-only reset; user confirmed stable audio afterward. Cause remains unproven. No audio processing algorithm changed in this release.
+
+## v0.1.11 — 2026-10-09 — release tooling, signing identity pending
+
+- Require company Authenticode signing, SHA256/RFC3161 timestamps and publisher/root verification before release MSI publication. Support approved certificate-store and Microsoft Artifact Signing providers without enrolling accounts or creating keys.
+- Keep explicit unsigned development installers outside dist. Validate signed MSI/payloads before installer tests execute them. Preserve original Microsoft/vendor signatures and stage application signing away from the running engine.
+- Use Cracken Released, LLC in MSI manufacturer metadata. Add signing regressions, key/config exclusions and official-source documentation distinguishing free Store/SignPath routes from standalone company MSI signing.
+- Correct the earlier description of C-Media setup.exe: its wrapper is unsigned, distinct from signed driver catalogs. Public builds reject it; original media and the working audio installation are preserved.
+- No public signed installer exists yet. Audio runtime remains v0.1.10; no capture, encoding, device or live-process changes.

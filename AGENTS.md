@@ -8,4 +8,5 @@ Before code work on this machine, read `E:\AI_Hub\AGENTS.md`, especially §20. E
 - Retain upstream license/provenance. Keep vendor media, builds, MSI files and private diagnostic state outside Git.
 - Use the existing regression tests appropriate to a change. Run `surround/tests/test_repository_hygiene.ps1` before committing.
 - `what_and_how_log.md` and `INSTALLATION.md` are private local continuity records; `README.md`, `docs/` and `changelog.md` are the reusable documentation.
-- The local release is v0.1.10. User confirmed game surround working after this repair; do not claim independent coverage of every game or hardware combination.
+- Release tooling is v0.1.11; the verified audio runtime remains v0.1.10. User confirmed game surround working; do not claim independent coverage of every game or hardware combination.
+- Default MSI builds require company publisher signing; unsigned development builds never go to dist. No public signing identity is enrolled. Original C-Media installer wrapper is unsigned, so public bundling is blocked. See docs/SIGNING.md; preserve original vendor media and never substitute self-signing for public trust.

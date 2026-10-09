@@ -4,6 +4,8 @@
 
 Working release: **v0.1.10**. Gaming surround was confirmed by the user through the USB optical adapter after the reboot speaker-layout repair.
 
+Release tooling: **v0.1.11**, with required publisher signing and a separate unsigned development mode. No public signed release exists yet. See [signing and free distribution options](docs/SIGNING.md).
+
 ```text
 Game / Windows audio
     → VB-CABLE configured as six assigned speakers
@@ -17,7 +19,7 @@ SurroundForge enables a USB optical adapter to carry real-time compressed 5.1 fr
 
 ## Install and use
 
-The locally built installer is `surround/dist/SurroundForge-0.1.10-x64.msi`. MSI files are release artifacts and are excluded from Git.
+The existing private migration installer is `surround/dist/SurroundForge-0.1.10-x64.msi`; it is unsigned. Public MSI creation now requires verified signing. Development installers stay under `surround/installer/build/development/`. MSI files are excluded from Git.
 
 1. Install on Windows 10/11 x64 and open **SurroundForge Setup**.
 2. Connect the adapter's optical OUT to the receiver's optical IN; select the receiver's optical input.

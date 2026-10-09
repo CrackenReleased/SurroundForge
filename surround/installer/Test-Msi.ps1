@@ -1,9 +1,13 @@
 [CmdletBinding()]
-param([switch]$InstallRoundTrip,[string]$UpgradeFromMsi='')
+param([switch]$InstallRoundTrip,[string]$UpgradeFromMsi='', [string]$SigningConfiguration='', [switch]$DevelopmentUnsigned)
 $ErrorActionPreference='Stop'
+. (Join-Path $PSScriptRoot 'Signing.ps1')
+if($DevelopmentUnsigned -and $SigningConfiguration){throw 'Choose signed release or unsigned development, not both.'}
+$policy=if(-not $DevelopmentUnsigned){Read-SigningConfiguration $SigningConfiguration}else{$null}
 $root=Split-Path $PSScriptRoot -Parent
-$msi=Join-Path $root 'dist\SurroundForge-0.1.10-x64.msi'
-$validation=Join-Path $PSScriptRoot 'validation\0.1.10'
+$msi=if($DevelopmentUnsigned){Join-Path $PSScriptRoot 'build\development\SurroundForge-0.1.11-x64-UNSIGNED-DEVELOPMENT.msi'}else{Join-Path $root 'dist\SurroundForge-0.1.11-x64.msi'}
+if($policy){Test-ReleaseSignature -Path $msi -Policy $policy | Out-Null}
+$validation=Join-Path $PSScriptRoot 'validation\0.1.11'
 $extract=Join-Path $validation 'extract'
 New-Item -ItemType Directory -Path $validation -Force | Out-Null
 function Assert($value,[string]$message){if(-not $value){throw $message}}
@@ -21,8 +25,9 @@ function Query([string]$sql) {
   while($record=$view.Fetch()){$rows+=$record.StringData(1)}
   [void]$view.Close();return $rows
 }
-Assert ((Query "SELECT Value FROM Property WHERE Property='ProductVersion'") -eq '0.1.10') 'MSI product version mismatch'
+Assert ((Query "SELECT Value FROM Property WHERE Property='ProductVersion'") -eq '0.1.11') 'MSI product version mismatch'
 Assert ((Query "SELECT Value FROM Property WHERE Property='ProductName'") -eq 'SurroundForge') 'MSI product name mismatch'
+Assert ((Query "SELECT Value FROM Property WHERE Property='Manufacturer'") -eq 'Cracken Released, LLC') 'MSI manufacturer mismatch'
 Assert ((Query "SELECT Value FROM Property WHERE Property='UpgradeCode'") -eq '{5F84BC04-1D71-4E51-83D3-2832FCCF20F2}') 'Preserve MSI upgrade identity'
 foreach($directory in 'INSTALLFOLDER','AppMenu'){
   Assert (((Query "SELECT DefaultDir FROM Directory WHERE Directory='$directory'") -split '\|')[-1] -eq 'SurroundForge') "Product directory identity mismatch: $directory"
@@ -45,8 +50,20 @@ Msi-Run @('/a',('"'+$msi+'"'),('TARGETDIR="'+$extract+'"')) 'extract.log'
 $installedRoot=(Get-ChildItem -LiteralPath $extract -Filter 'Bridge.ps1' -Recurse -File | Select-Object -First 1).Directory.FullName
 Assert $installedRoot 'Bridge missing after extraction'
 foreach($name in 'Bridge.ps1','Setup.ps1') {
-  Assert ((Get-FileHash (Join-Path $installedRoot $name)).Hash -eq (Get-FileHash (Join-Path $root $name)).Hash) "Stale packaged source: $name"
+  if($policy){
+    Test-ReleaseSignature -Path (Join-Path $installedRoot $name) -Policy $policy | Out-Null
+    $packaged=[IO.File]::ReadAllText((Join-Path $installedRoot $name)) -replace '(?ms)^# SIG # Begin signature block.*\z',''
+    Assert ($packaged.TrimEnd() -ceq [IO.File]::ReadAllText((Join-Path $root $name)).TrimEnd()) "Stale packaged source: $name"
+  } else {Assert ((Get-FileHash (Join-Path $installedRoot $name)).Hash -eq (Get-FileHash (Join-Path $root $name)).Hash) "Stale packaged source: $name"}
 }
+if($policy){
+  Test-ReleaseSignature -Path (Join-Path $installedRoot 'Uninstall.ps1') -Policy $policy | Out-Null
+  foreach($file in Get-ChildItem -LiteralPath (Join-Path $installedRoot 'Runtime') -File){
+    if($file.Name -notmatch '^(msvcp|vcruntime|concrt)'){Test-ReleaseSignature -Path $file.FullName -Policy $policy | Out-Null}
+    else {Assert-MicrosoftSigningTool $file.FullName;Invoke-SigningTool $policy.SignToolPath @('verify','/pa','/all','/v',$file.FullName)}
+  }
+}
+# Release 0.1.11 changes packaging/signing, not the verified 0.1.10 audio engine.
 $engineVersion=& (Join-Path $installedRoot 'Runtime\engine.exe') --version
 Assert ($LASTEXITCODE -eq 0 -and $engineVersion -eq 'SurroundForge 0.1.10-local') 'Packaged engine/runtime version mismatch or dependency load failure'
 $devices=(& (Join-Path $installedRoot 'Runtime\bridge_control.exe') --devices-json) | ConvertFrom-Json

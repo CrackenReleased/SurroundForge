@@ -1,4 +1,6 @@
-# Build and verify SurroundForge v0.1.10
+# Build and verify SurroundForge release tooling v0.1.11
+
+The audio runtime stays v0.1.10; this version changes release signing and verification. [Signing setup and free distribution options](SIGNING.md) describe the outstanding identity/vendor requirements. Public MSI creation requires verified company signing; examples below explicitly build development packages.
 
 The working audio installation is Windows x64. The native engine uses C++17, Visual Studio 2022 Build Tools with a Windows SDK, CMake, and dynamically linked FFmpeg libraries. Python 3 is used for several integration tests. WiX 3.14 is used to build the MSI. There is no new kernel driver to compile or sign.
 
@@ -25,6 +27,7 @@ Safe tests that do not reconfigure this machine's live audio:
 & .\surround\tests\test_bridge_portable.ps1
 & .\surround\tests\test_setup.ps1
 & .\surround\tests\test_product_identity.ps1
+& .\surround\tests\test_release_signing.ps1
 & .\surround\tests\test_startup_identity.ps1
 & .\surround\tests\test_setup_render.ps1
 & .\surround\tests\test_speaker_layout.ps1
@@ -48,18 +51,18 @@ The existing builder expects local dependencies at these paths, excluded from Gi
 Vendor download/provenance links are retained in `surround/installer/Third Party Notices.txt`. Preserve original media and publisher signatures. Do not assume permission to publish a bundled vendor installer simply because the source repository can be shared.
 
 ```powershell
-& .\surround\installer\Build-Msi.ps1
-& .\surround\installer\Test-Msi.ps1 -InstallRoundTrip
+& .\surround\installer\Build-Msi.ps1 -DevelopmentUnsigned
+& .\surround\installer\Test-Msi.ps1 -DevelopmentUnsigned -InstallRoundTrip
 ```
 
 The round-trip test installs into the project's validation folder, uninstalls afterward, and checks that the working bridge's defaults and startup shortcut were preserved. Build output, staging copies and validation logs are local artifacts, not source files.
 
-`Test-Msi.ps1 -InstallRoundTrip -UpgradeFromMsi '<previous-msi-path>'` also tests upgrading a previous release installed in its default folder. It refuses to overwrite an existing previous-version folder. The new package remembers custom install folders, and its removal test omits `INSTALLFOLDER` to verify normal uninstall. Older releases require their original custom folder to be supplied during removal if their default folder was changed.
+`Test-Msi.ps1 -DevelopmentUnsigned -InstallRoundTrip -UpgradeFromMsi '<previous-msi-path>'` also tests upgrading a previous release installed in its default folder. It refuses to overwrite an existing previous-version folder. The new package remembers custom install folders, and its removal test omits `INSTALLFOLDER` to verify normal uninstall. Older releases require their original custom folder to be supplied during removal if their default folder was changed.
 
 To build a package while the live engine is running, use a separate build directory and pass its Release folder to the existing builder. This avoids replacing the active executable or its DLLs:
 
 ```powershell
 cmake -S surround/source/engine -B surround/source/engine/build/package -G "Visual Studio 17 2022" -A x64 "-DVAC3_VERSION=0.1.10-local"
 cmake --build surround/source/engine/build/package --config Release
-& .\surround\installer\Build-Msi.ps1 -ReleaseDirectory "$PWD\surround\source\engine\build\package\Release"
+& .\surround\installer\Build-Msi.ps1 -DevelopmentUnsigned -ReleaseDirectory "$PWD\surround\source\engine\build\package\Release"
 ```

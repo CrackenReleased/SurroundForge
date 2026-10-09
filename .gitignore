@@ -21,6 +21,7 @@
 /surround/installer/*
 !/surround/installer/*.ps1
 !/surround/installer/*.txt
+!/surround/installer/*.example.json
 !/surround/installer/License.rtf
 
 /surround/source/*
@@ -57,4 +58,8 @@
 *.spdif
 .vs/
 *.user
+*.pfx
+*.p12
+*.pem
+*.key
 .DS_Store

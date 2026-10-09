@@ -1,0 +1,8 @@
+{
+  "Provider": "ArtifactSigning",
+  "SignToolPath": "C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x64\\signtool.exe",
+  "TimestampUrl": "http://timestamp.acs.microsoft.com",
+  "TrustedRootThumbprints": ["F40042E2E5F7E8EF8189FED15519AECE42C3BFA2"],
+  "DlibPath": "REPLACE_WITH_INSTALLED_X64_MICROSOFT_DLIB_PATH",
+  "MetadataPath": ".local/signing/artifact-metadata.json"
+}
