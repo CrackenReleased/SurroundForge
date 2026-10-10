@@ -14,6 +14,14 @@ Assert ($selection.Preferred.id -eq 'optical') 'Must prefer USB optical output'
 Assert ($selection.Outputs.Count -eq 1) 'Only physical optical outputs may appear'
 Assert ((Get-SetupSelection $script:Devices 'speakers').Preferred.id -eq 'optical') 'Never retain ordinary speakers as an optical output'
 Assert (-not (Get-SetupSelection @($script:Devices | Where-Object {$_.id -ne 'virtual'}) '').Input) 'Stereo cable cannot replace multichannel input'
+$brandedDevices=@(
+  [pscustomobject]@{id='sf-virtual';name='SurroundForge 5.1 (VB-Audio Virtual Cable)';isSpdif=$false},
+  [pscustomobject]@{id='sf-kernel';name='SurroundForge 5.1 (SurroundForge Audio)';isSpdif=$true},
+  [pscustomobject]@{id='optical';name='SPDIF Out (USB Sound Device)';isSpdif=$true}
+)
+$brandedSelection=Get-SetupSelection $brandedDevices ''
+Assert ($brandedSelection.Input.id -eq 'sf-virtual') 'Must recognize SurroundForge 5.1 branded virtual input'
+Assert ($brandedSelection.Outputs.Count -eq 1 -and $brandedSelection.Outputs[0].id -eq 'optical') 'Never offer SurroundForge virtual endpoint as physical optical output'
 $sysDrive = if ($env:SystemDrive) { $env:SystemDrive } else { 'C:' }
 $sampleDir = Join-Path $sysDrive 'Sample'
 $otherDir = Join-Path $sysDrive 'Other'

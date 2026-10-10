@@ -1,57 +1,61 @@
 # SurroundForge
 
-**Forge real PC surround sound through an ordinary USB optical adapter.**
+**Forge real PC surround sound through a USB optical adapter.**
 
-Working audio runtime: **v0.1.15-local**. Optical output now refills from actual device space on a local timer, preserving complete AC3 bursts and catching up after delayed wakes. This addresses a measured slow USB event cadence that caused recurring jitter despite a healthy heartbeat. Complete PCM packets, bounded recovery and tolerance of health-file locks remain covered by regressions. Frame counters and a sustained live cadence test distinguish audio delivery from worker responsiveness. User confirmed clear, steady sound after this repair; overnight stability still requires observation.
+Source revision: **v0.1.16-local, migration revision 1**. The running audio engine remains **v0.1.15-local**; controls are v0.1.16 and MSI tooling remains v0.1.11. No signed public installer or native-driver release has been produced.
 
-Release tooling: **v0.1.11**, with required publisher signing and a separate unsigned development mode. No public signed release exists yet. See [signing and free distribution options](docs/SIGNING.md).
+Canonical local checkout: `E:\SurroundForge`. Public source: [CrackenReleased/SurroundForge](https://github.com/CrackenReleased/SurroundForge). Commands below run from the repository root; other computers may clone into any directory.
 
 ```text
 Game / Windows audio
-    → VB-CABLE configured as six assigned speakers
+    → virtual six-channel 48 kHz render endpoint
     → WASAPI loopback + Windows volume/mute
-    → real-time AC3 encoder
-    → optical S/PDIF
-    → receiver → 5.1 speakers
+    → user-mode AC3 encoder
+    → optical S/PDIF → compatible receiver → 5.1 speakers
 ```
 
-SurroundForge enables a USB optical adapter to carry real-time compressed 5.1 from games and Windows audio. It uses signed audio drivers and a native userspace encoder. The connected receiver must decode AC3 (Dolby Digital) over its optical input; it does not need to be a particular brand. The adapter must support encoded S/PDIF output. The original USB hardware was verified; other adapter combinations have not been independently tested. Ordinary stereo sources stay stereo; it does not fake game surround by enabling stereo upmixing.
+The verified local route uses the signed VB-CABLE virtual endpoint and the USB adapter's optical output. The endpoint may display as **SurroundForge 5.1 (VB-Audio Virtual Cable)** after branding; that name does not mean the custom kernel driver is installed. The receiver must decode AC3 (Dolby Digital) over optical, and the adapter must support encoded S/PDIF output. Ordinary stereo sources remain stereo; game surround does not rely on stereo upmixing. Other hardware combinations and overnight stability remain unverified.
 
-## Install and use
+## Native driver status
 
-The existing private migration installer is `surround/dist/SurroundForge-0.1.10-x64.msi`; it is unsigned. Public MSI creation now requires verified signing. Development installers stay under `surround/installer/build/development/`. MSI files are excluded from Git.
+`surround/source/driver/` contains SurroundForge's Microsoft SimpleAudioSample-derived WaveRT driver source, with a render-only **SurroundForge 5.1 (SurroundForge Audio)** endpoint, `ROOT\SurroundForgeAudio` identity, six speakers at 48 kHz, PCM16/PCM32/float32 formats and a persistent `0x3f` speaker mask. The user-mode engine still performs capture, encoding and optical transport.
 
-1. Install on Windows 10/11 x64 and open **SurroundForge Setup**.
-2. Connect the adapter's optical OUT to the receiver's optical IN; select the receiver's optical input.
-3. Install missing vendor drivers using Setup. Restart if requested. In C-Media/Xear settings, enable **SPDIF Out**.
-4. Select the physical optical output, then **Save and start surround**. Enable startup if desired.
+The WDK is not installed on the current development machine, and no compiled `.sys/.inf/.cat` package or native-driver hardware verification is available. Setup recognizes the native endpoint name, but the MSI and vendor installation flow still use VB-CABLE. Native driver distribution requires a successful WDK build, Microsoft signing and integration validation. [Driver build notes](surround/source/driver/README.md) and [signing requirements](docs/SIGNING.md) describe these remaining gates.
+
+## Install and use the verified route
+
+The private v0.1.10 migration MSI and v0.1.11 development MSI are unsigned local artifacts, excluded from Git. Public MSI creation requires verified publisher signing.
+
+1. On Windows x64, open **SurroundForge Setup** from the existing installation or run `surround/Setup.ps1` from a checkout with built dependencies.
+2. Connect the adapter's optical OUT to the receiver's optical IN and select that input.
+3. Install missing vendor drivers using Setup; restart if requested. Enable **SPDIF Out** in the adapter's C-Media/Xear settings.
+4. Select the virtual input and physical optical output, then **Save and start surround**. Enable startup if desired.
 5. Use 5.1/home-theater settings in games. Windows volume and mute control listening volume.
 
-The driver's **CABLE In 16ch** name describes its capacity. SurroundForge configures it to **six channels at 48 kHz**, with assigned FL/FR/FC/LFE/BL/BR speakers. Startup repairs the speaker mask if Windows loses it after reboot.
+Startup checks six assigned FL/FR/FC/LFE/BL/BR speakers at 48 kHz and repairs a missing speaker mask. **Stop SurroundForge** cancels supervision and restores the previous Windows output defaults. Closing the controller window keeps audio running; **Stop audio & close** stops it explicitly.
 
-**Stop SurroundForge** restores the previous Windows output defaults. The launcher identifies its own encoder by executable path, PID and start time, and preserves a separately selected communications headset.
+The Sonic Anvil controller provides speaker calibration and Stereo/5.1/7.1 test layouts. The custom kernel endpoint and AC3 optical transport are 5.1; an eight-speaker calibration UI does not establish a native 7.1 optical transport.
 
 ## Source map
 
 | Location | Purpose |
 |---|---|
-| `surround/Bridge.ps1` | Start/stop, startup, speaker-layout repair and diagnostics |
+| `surround/Bridge.ps1` | Owned engine lifecycle, supervision, startup and diagnostics |
 | `surround/Setup.ps1` | Destination-PC device selection and vendor setup |
+| `surround/Tray.ps1` | Sonic Anvil controller and speaker calibration |
 | `surround/source/engine` | Native capture, volume/mute, AC3 and optical transport |
-| `surround/tests` | Native, lifecycle, layout and live integration regressions |
-| `surround/installer` | WiX MSI builder, installer validation and notices |
-| `docs/BUILD.md` | Rebuilding and validating the software |
-| `docs/TROUBLESHOOTING.md` | Diagnosing stereo, silence and reboot problems |
-| `changelog.md` | Release history |
+| `surround/source/driver` | Custom WaveRT virtual 5.1 driver source and build/CAB tooling |
+| `surround/tests` | Native, mock, configuration and integration regressions |
+| `surround/installer` | WiX MSI builder, signing safeguards and notices |
+| `docs/BUILD.md` | Rebuilding, testing and directory migration |
+| `docs/TROUBLESHOOTING.md` | Audio and relocation diagnostics |
+| `docs/SIGNING.md` | Application and driver signing status |
+| `changelog.md` | Release and documentation history |
 
-## What is deliberately local
+Run the existing offline checks with `powershell -NoProfile -ExecutionPolicy Bypass -File .\Run-Tests.ps1 -Suite Offline` after building the engine. CI builds and tests source on Windows; it does not compile the kernel driver or certify hardware playback.
 
-Device IDs, running process state, audio/event logs, registry backups, downloaded drivers, FFmpeg binaries, build output and installers stay outside Git. The original diagnostic history is preserved on this computer. Diagnostics record signal peaks, not audio recordings.
+## Local files and provenance
 
-The repository is local and has not been published. The working installation stays in its current folder so its startup shortcut and live encoder continue to work.
+Device IDs, ownership/health state, logs, registry backups, downloaded vendor media, FFmpeg binaries, build outputs and installers stay outside Git. Diagnostics store signal peaks rather than audio recordings. The project-scoped private continuity files are `INSTALLATION.md` and `what_and_how_log.md`; the AI Hub documentation directory is a read-only mirror of this checkout.
 
-## Credits and licenses
-
-The engine is adapted from [strepto42/virtual-ac3-encoder](https://github.com/strepto42/virtual-ac3-encoder), upstream v0.1.5, commit `3be5ba878f9689b0257c03ff4759d19cdf552cb5`. Its original MIT license and notices are retained in `surround/source/`. FFmpeg, doctest, VB-Audio, C-Media and Microsoft runtime components retain their respective licenses; see `surround/installer/Third Party Notices.txt`.
-
-The repository contains the reusable source and instructions. Vendor installer binaries remain local, and the MSI was built as a personal migration package. Other hardware combinations have not been independently verified.
+The engine is adapted from [strepto42/virtual-ac3-encoder](https://github.com/strepto42/virtual-ac3-encoder), upstream v0.1.5, commit `3be5ba878f9689b0257c03ff4759d19cdf552cb5`. Its MIT license and Microsoft's driver copyright headers are retained. See [source notices](surround/source/NOTICE.md) and `surround/installer/Third Party Notices.txt` for dependency attribution. Vendor installer binaries are local inputs, not public repository deliverables.

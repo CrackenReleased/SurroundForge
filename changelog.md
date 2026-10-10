@@ -1,3 +1,21 @@
+## v0.1.16-local — 2026-10-10 — migration revision 1
+
+- Establish `E:\SurroundForge` as the canonical checkout and GitHub source repository; update root/source/driver build, troubleshooting, signing and attribution docs. AI Hub project files are documentation mirrors.
+- Distinguish the live v0.1.15 vendor-driver route, v0.1.16 controls/source and v0.1.11 MSI tooling from the unbuilt native WaveRT driver source. Microsoft attestation signing does not imply HLK/WHQL certification.
+- Fail the driver builder when the WDK is missing and reject unsupported `-Sign`; prefer amd64 MSBuild. The regression reproduces the prior silent success.
+- Test fresh builds with `Run-Tests.ps1 -EngineBuildDirectory` after relocation; keep running binaries intact. Offline controller guards no longer initialize real C-Media hardware.
+- Fix the suite summary so exactly one failing test exits nonzero; add executable child-process regressions for one/multiple failures and a single pass.
+- Include canonical source guidance and exclude all WDK platform outputs/CABs; keep private state, vendor media and legacy upstream test-install helpers local.
+
+## v0.1.16-local — 2026-10-10 — SurroundForge 5.1 endpoint branding, Sonic Anvil controller & 8-speaker calibration stage, WaveRT kernel driver source & attestation packaging tooling
+
+- Brand the active 5.1 virtual audio endpoint as `SurroundForge 5.1` (`PKEY_Device_DeviceDesc`) in `bridge_control.exe` (`--set-51` and `--set-mix-51`) and persist `PKEY_AudioEndpoint_PhysicalSpeakers = 0x3f` after `SetDeviceFormat` so Windows Sound Output displays `SurroundForge 5.1` and games receive true 5.1 surround (`layout_51=1`).
+- Replace the placeholder `"S"` circle in `Tray.ps1` and `IDI_APPLICATION` in `TrayApp.cpp` with the custom **Sonic Anvil** vector icon (`SurroundForgeTrayIcon::RenderSonicAnvilBitmap` / `WriteSonicAnvilIco`), compile and launch a native GUI host (`$env:LOCALAPPDATA\SurroundForge\SurroundForge.exe`) with the embedded multi-size Sonic Anvil `.ico` resource onto `WinSta0\Default` so the Windows 11 Taskbar button displays the Sonic Anvil logo instead of the PowerShell icon, and add a **Stop audio & close** button (`UseMnemonic = $false`) and context-menu action.
+- Add an interactive 8-speaker spatial calibration stage (`FL`, `FC`, `FR`, `LFE`, `SL`, `SR`, `BL`, `BR`) and `Stereo` / `5.1` / `7.1` layout switcher to `Tray.ps1` backed by `bridge_control.exe --tone-speaker ID SPEAKER LAYOUT` (synthesizing distinct G3-series harmonic tones per speaker over shared-mode WASAPI without interrupting the optical bridge).
+- Update `IsCableInput` (`BridgeControl.cpp`) and `Test-SetupMultichannelInput` / `Test-SetupVirtualOutput` (`Setup.ps1`) to accept both `CABLE In 16ch (VB-Audio Virtual Cable)` and `SurroundForge 5.1 (...)` endpoints while continuing to block virtual endpoints from being chosen as physical optical outputs.
+- Upgrade the in-tree WaveRT kernel driver (`surround/source/driver`) to `Cracken Released, LLC` / `SurroundForge 5.1` (`ROOT\SurroundForgeAudio`), fix `SpeakerJackDescBridge` in `speakertoptable.h` from `KSAUDIO_SPEAKER_STEREO` to `KSAUDIO_SPEAKER_5POINT1`, persist `PKEY_AudioEndpoint_PhysicalSpeakers = 0x0000003f` in `SimpleAudioSample.inx`, and add 32-bit IEEE float + 32-bit PCM 6-channel 48 kHz format support in `speakerwavtable.h`.
+- Add `surround/source/driver/New-AttestationCab.ps1` and document the Microsoft Partner Center Hardware Program + certificate association/submission workflow in `docs/SIGNING.md`.
+
 ## v0.1.15-local — 2026-10-10 — optical delivery follows device space
 
 - Replace exclusive USB callback pacing with timer-driven, padding-aware refill. Live v0.1.14 delivery was approximately 43,850 frames/second despite a ready heartbeat; the repaired route delivers approximately 48,000.

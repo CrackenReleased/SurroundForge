@@ -63,3 +63,25 @@ Current unsigned C-Media media must be resolved before this produces a public MS
 ```
 
 The regression checks required signing mode, real rejection of an unsigned file, wrong publisher, missing timestamps, unapproved roots, self-signing, SHA256/RFC3161 arguments, SignTool warning exits, unsigned vendor wrappers and unchanged `dist` artifacts on a rejected default build. It installs no certificate and makes no audio changes. Mocked certificate facts test policy rejection; they are not evidence of real public signing.
+
+## Custom WaveRT driver: Microsoft signing and certification
+
+Driver source revision: v0.1.16-local, migration revision 1. The solution is `surround/source/driver/SimpleAudioSample.sln`. It advertises a render-only **SurroundForge 5.1 (SurroundForge Audio)** endpoint (`ROOT\SurroundForgeAudio`) with six assigned speakers at 48 kHz, PCM16/PCM32/float32 and physical-speaker mask `0x3f`.
+
+No compiled driver package, enrolled public signing identity, submission or native-driver hardware verification is available. The verified live route uses VB-CABLE. Source metadata and a CAB file do not establish that Windows will load the driver.
+
+Microsoft offers **attestation signing** and **HLK-tested certification** as different routes. Attestation does not make a driver Windows Certified; HLK/WHQL certification requires the applicable test results. See Microsoft's [driver signing options](https://learn.microsoft.com/en-us/windows-hardware/drivers/dashboard/driver-signing-offerings) and [kernel-mode signing policy](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/kernel-mode-code-signing-policy--windows-vista-and-later-). Check the current supported submission route before choosing a distribution target.
+
+1. Establish the company's Hardware Developer Program account and required certificate association using Microsoft's [code-signing requirements](https://learn.microsoft.com/en-us/windows-hardware/drivers/dashboard/code-signing-reqs). No identity enrollment or certificate purchase has been performed by this project.
+2. Install a compatible WDK and build `surround/source/driver/SimpleAudioSample.sln` using the existing builder:
+
+   ```powershell
+   & .\surround\source\driver\Build-Driver.ps1 -Configuration Release -Platform x64
+   & .\surround\source\driver\New-AttestationCab.ps1 -VerifySourceOnly
+   & .\surround\source\driver\New-AttestationCab.ps1 -DriverPackageDir "$PWD\surround\source\driver\x64\Release\package"
+   ```
+
+3. Sign and submit the built CAB through the applicable Microsoft dashboard route, or supply the required HLK results for certification. The helper only packages files: it neither signs nor uploads a submission.
+4. Validate the returned Microsoft-signed package, root device creation, negotiated formats, loopback capture, per-channel AC3 delivery and hardware playback before integrating it into Setup/MSI or publishing a native-driver release.
+
+Legacy upstream test-signing scripts remain private development helpers, excluded from Git. Normal installation must not change Secure Boot, enable test signing or import a local test certificate. Existing publisher-signing safeguards for the application MSI remain independent of kernel-driver approval.

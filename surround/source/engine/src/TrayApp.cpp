@@ -121,6 +121,92 @@ void OpenSetup() {
     }
 }
 
+constexpr UINT ID_TRAY_STOP_EXIT = 1006;
+
+HICON CreateSonicAnvilIcon() {
+    constexpr int kSize = 32;
+    HDC screenDc = GetDC(nullptr);
+    HDC memDc = CreateCompatibleDC(screenDc);
+    BITMAPV5HEADER bi{};
+    bi.bV5Size = sizeof(BITMAPV5HEADER);
+    bi.bV5Width = kSize;
+    bi.bV5Height = -kSize;
+    bi.bV5Planes = 1;
+    bi.bV5BitCount = 32;
+    bi.bV5Compression = BI_BITFIELDS;
+    bi.bV5RedMask   = 0x00FF0000;
+    bi.bV5GreenMask = 0x0000FF00;
+    bi.bV5BlueMask  = 0x000000FF;
+    bi.bV5AlphaMask = 0xFF000000;
+    void* bits = nullptr;
+    HBITMAP colorBmp = CreateDIBSection(screenDc, reinterpret_cast<BITMAPINFO*>(&bi), DIB_RGB_COLORS, &bits, nullptr, 0);
+    HBITMAP maskBmp = CreateBitmap(kSize, kSize, 1, 1, nullptr);
+    HGDIOBJ oldBmp = SelectObject(memDc, colorBmp);
+
+    HBRUSH bgBrush = CreateSolidBrush(RGB(13, 17, 23));
+    HPEN cyanPen = CreatePen(PS_SOLID, 2, RGB(0, 228, 196));
+    HGDIOBJ oldBrush = SelectObject(memDc, bgBrush);
+    HGDIOBJ oldPen = SelectObject(memDc, cyanPen);
+    Ellipse(memDc, 1, 1, 31, 31);
+    Arc(memDc, 4, 4, 28, 28, 26, 6, 6, 26);
+
+    POINT anvil[] = {
+        {5, 14}, {11, 14}, {12, 13}, {25, 13}, {24, 15},
+        {20, 17}, {19, 20}, {22, 23}, {22, 25}, {18, 25},
+        {16, 23}, {14, 25}, {10, 25}, {10, 23}, {13, 20},
+        {12, 17}, {8, 16}
+    };
+    HBRUSH goldBrush = CreateSolidBrush(RGB(255, 182, 48));
+    HPEN goldPen = CreatePen(PS_SOLID, 1, RGB(255, 218, 110));
+    SelectObject(memDc, goldBrush);
+    SelectObject(memDc, goldPen);
+    Polygon(memDc, anvil, ARRAYSIZE(anvil));
+
+    SelectObject(memDc, oldBrush);
+    SelectObject(memDc, oldPen);
+    DeleteObject(goldBrush);
+    DeleteObject(goldPen);
+    DeleteObject(bgBrush);
+    DeleteObject(cyanPen);
+    SelectObject(memDc, oldBmp);
+    DeleteDC(memDc);
+    ReleaseDC(nullptr, screenDc);
+
+    DWORD* pixel = static_cast<DWORD*>(bits);
+    for (int i = 0; i < kSize * kSize; ++i) {
+        if ((pixel[i] & 0x00FFFFFF) != 0) pixel[i] |= 0xFF000000;
+    }
+
+    ICONINFO ii{};
+    ii.fIcon = TRUE;
+    ii.hbmMask = maskBmp;
+    ii.hbmColor = colorBmp;
+    HICON hIcon = CreateIconIndirect(&ii);
+    DeleteObject(colorBmp);
+    DeleteObject(maskBmp);
+    return hIcon ? hIcon : LoadIconW(nullptr, reinterpret_cast<LPCWSTR>(IDI_APPLICATION));
+}
+
+void StopAudioAndExit(HWND hWnd) {
+    std::wstring stopCmd = g_rootPath + L"\\surround\\Stop 5.1.cmd";
+    if (GetFileAttributesW(stopCmd.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        stopCmd = g_rootPath + L"\\Stop 5.1.cmd";
+    }
+    STARTUPINFOW si{ sizeof(si) };
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION pi{};
+    std::wstring cmd = L"cmd.exe /c \"" + stopCmd + L"\"";
+    std::vector<wchar_t> cmdBuf(cmd.begin(), cmd.end());
+    cmdBuf.push_back(0);
+    if (CreateProcessW(nullptr, cmdBuf.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, g_rootPath.c_str(), &si, &pi)) {
+        WaitForSingleObject(pi.hProcess, 10000);
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+    }
+    DestroyWindow(hWnd);
+}
+
 void ShowContextMenu(HWND hWnd, POINT pt) {
     HMENU hMenu = CreatePopupMenu();
     if (!hMenu) return;
@@ -130,7 +216,8 @@ void ShowContextMenu(HWND hWnd, POINT pt) {
     InsertMenuW(hMenu, 2, MF_BYPOSITION | MF_STRING, ID_TRAY_RESTART, L"&Restart 5.1 Audio");
     InsertMenuW(hMenu, 3, MF_BYPOSITION | MF_STRING, ID_TRAY_SETUP, L"&Configure Setup...");
     InsertMenuW(hMenu, 4, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
-    InsertMenuW(hMenu, 5, MF_BYPOSITION | MF_STRING, ID_TRAY_EXIT, L"E&xit Tray");
+    InsertMenuW(hMenu, 5, MF_BYPOSITION | MF_STRING, ID_TRAY_STOP_EXIT, L"&Stop 5.1 Audio && Close");
+    InsertMenuW(hMenu, 6, MF_BYPOSITION | MF_STRING, ID_TRAY_EXIT, L"E&xit Tray (Audio Continues)");
 
     SetForegroundWindow(hWnd);
     TrackPopupMenu(hMenu, TPM_RIGHTBUTTON | TPM_BOTTOMALIGN, pt.x, pt.y, 0, hWnd, nullptr);
@@ -154,6 +241,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             break;
         case ID_TRAY_SETUP:
             OpenSetup();
+            break;
+        case ID_TRAY_STOP_EXIT:
+            StopAudioAndExit(hWnd);
             break;
         case ID_TRAY_EXIT:
             DestroyWindow(hWnd);
@@ -198,7 +288,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
                              0, 0, 0, 0, nullptr, nullptr, hInstance, nullptr);
     if (!g_hWnd) return 1;
 
-    HICON hIcon = LoadIconW(nullptr, reinterpret_cast<LPCWSTR>(IDI_APPLICATION));
+    HICON hIcon = CreateSonicAnvilIcon();
 
     g_nid.cbSize = sizeof(NOTIFYICONDATAW);
     g_nid.hWnd = g_hWnd;

@@ -5,12 +5,13 @@ commit `3be5ba878f9689b0257c03ff4759d19cdf552cb5`. Its original MIT license is r
 in `LICENSE`. Binary dependencies and vendor installers are not committed to this
 source repository; they remain separate local dependencies.
 
-## Upstream experimental driver (not used or included here)
-The upstream project includes a driver derived from Microsoft's
-**Windows-driver-samples** "SimpleAudioSample" (MIT, Copyright Microsoft Corporation).
-That experimental driver is not part of SurroundForge's source snapshot or tested
-runtime. The verified path uses the existing signed VB-Audio and C-Media drivers.
-
+## SurroundForge WaveRT driver — `driver/`
+The included render-only virtual 5.1 endpoint is adapted from Microsoft's
+**Windows-driver-samples** "SimpleAudioSample" (MIT, Copyright Microsoft Corporation),
+retained from the upstream virtual-ac3-encoder source. Original Microsoft copyright
+headers remain in the source files. SurroundForge changes include product identity,
+six-channel formats and topology. The driver has not been built or validated on this
+machine; the verified live route still uses signed VB-Audio and C-Media drivers.
 ## Engine design — `engine/`
 The real-time encode/forward design (output clock as master, lock-free ring buffer, periodic
 drift-trim) is modeled on **SoundPusher** by Daniel Vollmer

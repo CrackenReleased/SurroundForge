@@ -1,0 +1,30 @@
+/*++
+
+Copyright (c) Microsoft Corporation All Rights Reserved
+
+Module Name:
+
+    SimpleAudioSample.rc
+
+Abstract:
+
+--*/
+
+#include <windows.h>
+
+#include <ntverp.h>
+
+#define VER_FILETYPE                VFT_DRV
+#define VER_FILESUBTYPE             VFT2_DRV_SOUND
+#define VER_COMPANYNAME_STR         "Cracken Released, LLC"
+#define VER_PRODUCTNAME_STR         "SurroundForge"
+#define VER_FILEDESCRIPTION_STR     "SurroundForge 5.1 Virtual Audio Driver"
+#define VER_INTERNALNAME_STR        "SimpleAudioSample.sys"
+#define VER_ORIGINALFILENAME_STR    "SimpleAudioSample.sys"
+
+#define VER_LEGALCOPYRIGHT_YEARS    "2026"
+#define VER_LEGALCOPYRIGHT_STR      "Copyright (C) Cracken Released, LLC " VER_LEGALCOPYRIGHT_YEARS
+
+#include "common.ver"
+
+

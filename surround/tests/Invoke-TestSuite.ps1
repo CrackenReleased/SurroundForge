@@ -9,14 +9,15 @@ param(
   [ValidateSet('Offline','Live','All')]
   [string]$Suite = 'Offline',
   [switch]$FailFast,
-  [int]$CadenceSeconds = 15
+  [int]$CadenceSeconds = 15,
+  [string]$EngineBuildDirectory = ''
 )
 
 $ErrorActionPreference = 'Continue'
 $rootDir = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $testDir = Join-Path $rootDir 'surround\tests'
 $engineDir = Join-Path $rootDir 'surround\source\engine'
-$engineBuildDir = Join-Path $engineDir 'build'
+$engineBuildDir = if ($EngineBuildDirectory) { [IO.Path]::GetFullPath($EngineBuildDirectory) } else { Join-Path $engineDir 'build' }
 
 # Locate build & test tools
 $cmakePaths = @(
@@ -116,6 +117,10 @@ if ($Suite -in @('Offline', 'All')) {
     & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $testDir 'test_repository_hygiene.ps1')
   }
 
+  Invoke-SingleTest 'Test Runner Failure Reporting' 'Harness' {
+    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $testDir 'test_suite_runner.ps1')
+  }
+
   # 2. Product Identity
   Invoke-SingleTest 'Product Identity' 'Identity' {
     & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $testDir 'test_product_identity.ps1')
@@ -132,7 +137,7 @@ if ($Suite -in @('Offline', 'All')) {
   }
 
   # 5. Native C++ Unit Tests (CTest / doctest)
-  Invoke-SingleTest 'Native C++ Unit Tests (39 cases)' 'Native' {
+  Invoke-SingleTest 'Native C++ Unit Tests' 'Native' {
     $unitTestsExe = Join-Path $engineBuildDir 'Release\unit_tests.exe'
     if (Test-Path $unitTestsExe) {
       & $unitTestsExe
@@ -186,12 +191,12 @@ if ($Suite -in @('Offline', 'All')) {
   # 14. Bridge Control Python CLI Guards
   if ($pythonExe) {
     Invoke-SingleTest 'Bridge Control CLI Guards' 'Python' {
-      & $pythonExe (Join-Path $testDir 'test_bridge_control.py')
+      & $pythonExe (Join-Path $testDir 'test_bridge_control.py') --control (Join-Path $engineBuildDir 'Release\bridge_control.exe')
     }
 
     # 15. Six-Channel Audio Roundtrip Isolation
     Invoke-SingleTest '6-Channel Audio Roundtrip' 'Python' {
-      & $pythonExe (Join-Path $testDir 'test_channel_roundtrip.py')
+      & $pythonExe (Join-Path $testDir 'test_channel_roundtrip.py') --encoder (Join-Path $engineBuildDir 'Release\encode_wav.exe')
     }
   } else {
     Write-Host "  [SKIP] Python not found on PATH; skipping python CLI and channel tests." -ForegroundColor DarkYellow
@@ -235,8 +240,8 @@ Write-Host "`n==================================================================
 Write-Host " TEST SUITE SUMMARY RESULTS" -ForegroundColor Cyan
 Write-Host "================================================================================" -ForegroundColor Cyan
 
-$passedCount = ($results | Where-Object { $_.Status -eq 'PASS' }).Count
-$failedCount = ($results | Where-Object { $_.Status -eq 'FAIL' }).Count
+$passedCount = @($results | Where-Object { $_.Status -eq 'PASS' }).Count
+$failedCount = @($results | Where-Object { $_.Status -eq 'FAIL' }).Count
 $totalCount = $results.Count
 
 $results | Format-Table -Property Name, Category, Status, Duration -AutoSize

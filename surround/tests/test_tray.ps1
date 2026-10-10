@@ -83,4 +83,17 @@ try {Restart-Bridge} catch {$caught=$true}
 Assert $caught 'Start failure must reach caller'
 Assert (($events -join ',') -eq 'disable,stop,wait,start,supervise') 'Start failure must re-enable owned supervision'
 Assert ($retryIntent.inputId -eq $inputId -and $retryIntent.defaults.'1' -eq 'headset') 'Failed restart must retain exact recovery intent'
-Write-Output "PASS: tray status and mocked restart ($assertions assertions); no live audio changes."
+$traySource = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\Tray.ps1') -Raw
+Assert ($traySource -match 'FillPolygon' -and $traySource -match 'DrawArc' -and $traySource -notmatch 'DrawString\("S"') 'Tray icon must render the custom Sonic Anvil vector logo rather than a generic letter S'
+Assert ($traySource -match 'Stop audio & close') 'Tray controller must provide a Stop audio & close action to stop the engine and exit cleanly'
+Assert ($traySource -match 'EnsureDefaultDesktop' -and $traySource -match 'SurroundForge_Tray_Launch' -and $traySource -match 'Ensure-SurroundForgeHost') 'Tray controller must relaunch via SurroundForge.exe onto Default desktop with Sonic Anvil Win32 icon'
+$catalog = @(Get-SpeakerCatalog)
+Assert ($catalog.Count -eq 8) 'All 8 surround speakers (FL, FC, FR, SL, LFE, SR, BL, BR) must be viewable in catalog'
+Assert ((($catalog | Select-Object -ExpandProperty Code) -join ',') -eq 'FL,FC,FR,SL,LFE,SR,BL,BR') 'Speaker catalog must expose exact 8 speaker codes'
+Assert ((($catalog | Select-Object -ExpandProperty Freq -Unique).Count) -eq 8) 'Every speaker must have a unique harmonic tone frequency description'
+Assert (((Get-SpeakerLayoutSequence 'stereo') -join ',') -eq 'FL,FR') 'Stereo layout sequence must test FL,FR'
+Assert (((Get-SpeakerLayoutSequence '5.1') -join ',') -eq 'FL,FC,FR,LFE,BL,BR') '5.1 layout sequence must test FL,FC,FR,LFE,BL,BR'
+Assert (((Get-SpeakerLayoutSequence '7.1') -join ',') -eq 'FL,FC,FR,LFE,SL,SR,BL,BR') '7.1 layout sequence must test all 8 speakers'
+Write-Output "PASS: tray status, Sonic Anvil taskbar icon host, 8-speaker interactive stage, Stereo/5.1/7.1 layout switcher, Stop & close, and mocked restart ($assertions assertions); no live audio changes."
+
+

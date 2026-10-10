@@ -424,7 +424,7 @@ function Ensure-BridgeTray {
   $tray=Join-Path $root 'Tray.ps1'
   if(-not (Test-Path -LiteralPath $tray)){return}
   try {
-    Start-Process -FilePath (Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe') -ArgumentList @('-NoProfile','-STA','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',('"'+$tray+'"')) -WorkingDirectory $root -WindowStyle Hidden | Out-Null
+    Start-Process -FilePath (Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe') -ArgumentList @('-NoProfile','-STA','-ExecutionPolicy','Bypass','-File',('"'+$tray+'"'),'-Show') -WorkingDirectory $root | Out-Null
   } catch {Write-Warning "Audio is available, but the status icon could not start: $_"}
 }
 function Restart-Bridge {

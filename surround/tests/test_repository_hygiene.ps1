@@ -5,8 +5,8 @@ $ErrorActionPreference='Stop'
 $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $files=@(& git -c core.fsmonitor=false -C $repo ls-files)
 if($LASTEXITCODE -ne 0 -or -not $files.Count){throw 'Stage or commit the repository before running this check.'}
-$badPaths=@($files | Where-Object {$_ -match '\.(exe|dll|lib|obj|pdb|msi|zip|evtx|reg|wav|ac3|spdif|log|pfx|p12|pem|key)$' -or
-  $_ -match '(^|/)(diagnostics|dist|output|build|toolchain|package|vbcable|\.local)(/|$)' -or
+$badPaths=@($files | Where-Object {$_ -match '\.(exe|dll|lib|obj|pdb|sys|cat|cab|ddf|rpt|msi|zip|evtx|reg|wav|ac3|spdif|log|pfx|p12|pem|key)$' -or
+  ($_ -match '(^|/)(diagnostics|dist|output|build|toolchain|package|vbcable|\.local)(/|$)' -and $_ -notmatch '^surround/source/driver/Package/') -or
   $_ -match '(^|/)(bridge\.conf|bridge-state\.json(?:\.next)?|engine-health\.json(?:\.next)?|supervisor-state\.json(?:\.next)?|supervisor\.log(?:\.previous)?|channel-activity\.csv|INSTALLATION\.md|what_and_how_log\.md)$'})
 if($badPaths.Count){throw "Private/generated files tracked: $($badPaths -join ', ')"}
 foreach($file in $files) {
@@ -24,7 +24,10 @@ foreach($example in 'surround/bridge.conf','surround/bridge-state.json','surroun
   'surround/diagnostics/example/snapshot.txt','surround/installer/payload/Bridge.ps1','surround/source/engine/build/Release/engine.exe',
   '.local/upstream-source.git/config','.local/signing/signing.json','.local/signing/artifact-metadata.json',
   'surround/installer/private-signing.json','surround/installer/private-certificate.pfx',
-  'package/WIN10/Setup.exe','surround/dist/example.msi') {
+  'package/WIN10/Setup.exe','surround/dist/example.msi',
+  'surround/source/driver/x64/Release/package/SimpleAudioSample.inf',
+  'surround/source/driver/ARM64/Release/package/SimpleAudioSample.inf',
+  'surround/source/driver/x64/Release/SurroundForge-Driver-Attestation.cab') {
   & git -c core.fsmonitor=false -C $repo check-ignore --quiet -- $example
   if($LASTEXITCODE -ne 0){throw "Ignore rule missing for $example"}
 }

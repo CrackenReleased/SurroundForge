@@ -18,7 +18,12 @@ function Invoke-SetupControl([string[]]$Arguments) {
   return $result
 }
 function Test-SetupVirtualOutput($Device) {
-  return ($Device.name -match '(?i)VB-Audio|\bCABLE\b')
+  return ($Device.name -match '(?i)VB-Audio|\bCABLE\b|SurroundForge|Virtual AC3 Encoder')
+}
+function Test-SetupMultichannelInput($Device) {
+  return ($Device.name -eq 'CABLE In 16ch (VB-Audio Virtual Cable)' -or
+    $Device.name -match '(?i)^SurroundForge 5\.1\b' -or
+    $Device.name -match '(?i)^Virtual AC3 Encoder\b')
 }
 function Get-SetupDevices {
   $json=(Invoke-SetupControl @('--devices-json')) -join [Environment]::NewLine
@@ -42,7 +47,7 @@ function Get-SetupHardware {
   return [pscustomobject]@{Attached=$attached;Installed=$installed;ErrorText=$errorText}
 }
 function Get-SetupSelection($Devices,[string]$SavedOutput) {
-  $inputDevice=@($Devices | Where-Object {$_.name -eq 'CABLE In 16ch (VB-Audio Virtual Cable)'}) | Select-Object -First 1
+  $inputDevice=@($Devices | Where-Object {Test-SetupMultichannelInput $_}) | Select-Object -First 1
   $outputs=@($Devices | Where-Object {$_.isSpdif -and -not (Test-SetupVirtualOutput $_)})
   $preferred=@($outputs | Where-Object {$_.id -eq $SavedOutput}) | Select-Object -First 1
   if(-not $preferred){$preferred=@($outputs | Where-Object {$_.isSpdif -and $_.name -match '(?i)USB'}) | Select-Object -First 1}
@@ -96,7 +101,7 @@ function Invoke-SetupBridge([ValidateSet('Start','Stop','EnableStartup','Disable
 function Save-SetupConfiguration([string]$InputId,[string]$OutputId,[bool]$Startup) {
   # Re-read endpoint identity immediately before changing anything.
   $devices=Get-SetupDevices
-  $inputDevice=$devices | Where-Object {$_.id -eq $InputId -and $_.name -eq 'CABLE In 16ch (VB-Audio Virtual Cable)'} | Select-Object -First 1
+  $inputDevice=$devices | Where-Object {$_.id -eq $InputId -and (Test-SetupMultichannelInput $_)} | Select-Object -First 1
   $outputDevice=$devices | Where-Object {$_.id -eq $OutputId} | Select-Object -First 1
   if(-not $inputDevice){throw 'Install VB-CABLE, restart if requested, then refresh this window.'}
   if(-not $outputDevice -or -not $outputDevice.isSpdif -or $InputId -eq $OutputId -or (Test-SetupVirtualOutput $outputDevice)) {
