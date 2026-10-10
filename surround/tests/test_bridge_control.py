@@ -42,10 +42,13 @@ else:
     expect(2, "must exactly match", "--set-51", OPTICAL)
     expect(2, "must exactly match", "--set-mix-51", OPTICAL)
     expect(2, "must exactly match", "--play-wav", OPTICAL, str(ROOT / "tests/output/sequential_5p1.wav"))
-expect(0, "0=", "--defaults")
 if has_live_config:
+    expect(0, "0=", "--defaults")
     expect(0, "scalar=", "--volume", CABLE)
 else:
+    res_def = subprocess.run([str(CONTROL), "--defaults"], capture_output=True, text=True)
+    assert (res_def.returncode == 0 and "0=" in res_def.stdout) or \
+           (res_def.returncode == 1 and "No default render endpoint" in res_def.stderr), res_def
     expect(1, "must exactly match", "--volume", CABLE)
 expect(2, "", "--set-volume", OPTICAL, "0.1", "0")
 expect(2, "", "--set-volume", CABLE, "nan", "0")
