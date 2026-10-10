@@ -34,11 +34,14 @@ expect(2, "Invalid command", "--unknown")
 expect(2, "exactly match", "--format", "not-an-endpoint")
 if has_live_config:
     expect(2, "ROLE must be exactly", "--default", OPTICAL, "99")
+    expect(2, "restricted to", "--set-51", OPTICAL)
+    expect(2, "restricted to", "--set-mix-51", OPTICAL)
+    expect(2, "restricted to", "--play-wav", OPTICAL, str(ROOT / "tests/output/sequential_5p1.wav"))
 else:
     expect(2, "must exactly match", "--default", OPTICAL, "99")
-expect(2, "restricted to", "--set-51", OPTICAL)
-expect(2, "restricted to", "--set-mix-51", OPTICAL)
-expect(2, "restricted to", "--play-wav", OPTICAL, str(ROOT / "tests/output/sequential_5p1.wav"))
+    expect(2, "must exactly match", "--set-51", OPTICAL)
+    expect(2, "must exactly match", "--set-mix-51", OPTICAL)
+    expect(2, "must exactly match", "--play-wav", OPTICAL, str(ROOT / "tests/output/sequential_5p1.wav"))
 expect(0, "0=", "--defaults")
 if has_live_config:
     expect(0, "scalar=", "--volume", CABLE)
