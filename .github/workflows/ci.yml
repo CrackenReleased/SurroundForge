@@ -10,9 +10,12 @@ on:
 jobs:
   test:
     name: Build & Verify SurroundForge Suite (Windows)
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up MSVC Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
 
       - name: Cache FFmpeg dev libs
         id: ffmpeg-cache
@@ -26,10 +29,10 @@ jobs:
         shell: pwsh
         run: ./surround/source/scripts/fetch-ffmpeg.ps1
 
-      - name: Configure CMake (VS 2022 x64)
+      - name: Configure CMake
         run: cmake -S surround/source/engine -B surround/source/engine/build -G "Visual Studio 17 2022" -A x64
 
-      - name: Build Engine & Unit Tests
+      - name: Build Engine, Tools & Unit Tests
         run: cmake --build surround/source/engine/build --config Release
 
       - name: Run Comprehensive Test Suite
