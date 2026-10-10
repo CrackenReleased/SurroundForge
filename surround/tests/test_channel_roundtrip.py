@@ -87,12 +87,20 @@ def assert_bursts(data):
 
 
 def main():
+    import os
     parser = argparse.ArgumentParser()
     parser.add_argument("--script", type=Path, default=ROOT / "source/scripts/make-test-wav.ps1")
     parser.add_argument("--encoder", type=Path, default=ROOT / "source/engine/build/Release/encode_wav.exe")
     args = parser.parse_args()
-    for tool in ("pwsh", "ffmpeg", "ffprobe"):
-        assert shutil.which(tool), f"Required existing tool unavailable: {tool}"
+
+    ffmpeg_bin = ROOT / "source/third_party/ffmpeg/bin"
+    if ffmpeg_bin.is_dir() and str(ffmpeg_bin) not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = f"{ffmpeg_bin};{os.environ.get('PATH', '')}"
+
+    missing = [tool for tool in ("pwsh", "ffmpeg", "ffprobe") if not shutil.which(tool)]
+    if missing:
+        print(f"SKIP: Required tools unavailable ({', '.join(missing)}); skipping roundtrip probe.")
+        return
     OUT.mkdir(parents=True, exist_ok=True)
     simultaneous = OUT / "simultaneous_regression.wav"
     sequence = OUT / "sequential_5p1.wav"

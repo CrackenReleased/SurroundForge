@@ -64,8 +64,13 @@ try {
 
 # The default command must fail before any staging, build or dist mutation.
 $dist=Join-Path (Split-Path $installer -Parent) 'dist'
-$before=@(Get-ChildItem -LiteralPath $dist -File | ForEach-Object {$_.Name+':'+(Get-FileHash $_.FullName).Hash}) -join '|'
+$before = if (Test-Path -LiteralPath $dist) {
+  @(Get-ChildItem -LiteralPath $dist -File | ForEach-Object {$_.Name+':'+(Get-FileHash $_.FullName).Hash}) -join '|'
+} else { '' }
 Reject {& (Join-Path $installer 'Build-Msi.ps1')} 'Signing configuration is required'
-$after=@(Get-ChildItem -LiteralPath $dist -File | ForEach-Object {$_.Name+':'+(Get-FileHash $_.FullName).Hash}) -join '|'
+$after = if (Test-Path -LiteralPath $dist) {
+  @(Get-ChildItem -LiteralPath $dist -File | ForEach-Object {$_.Name+':'+(Get-FileHash $_.FullName).Hash}) -join '|'
+} else { '' }
 Assert ($before -eq $after) 'Rejected release changed existing dist artifacts'
 Write-Output 'PASS: release defaults reject missing signing; unsigned/tampered/wrong publisher/missing timestamp/unapproved root/self-signing/vendor wrapper/warning exits rejected; both signing adapters checked; no dist mutation'
+

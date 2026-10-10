@@ -14,9 +14,12 @@ Assert ($selection.Preferred.id -eq 'optical') 'Must prefer USB optical output'
 Assert ($selection.Outputs.Count -eq 1) 'Only physical optical outputs may appear'
 Assert ((Get-SetupSelection $script:Devices 'speakers').Preferred.id -eq 'optical') 'Never retain ordinary speakers as an optical output'
 Assert (-not (Get-SetupSelection @($script:Devices | Where-Object {$_.id -ne 'virtual'}) '').Input) 'Stereo cable cannot replace multichannel input'
-Assert (Test-SetupStartupOwner '-NoProfile -File "E:\Sample\Bridge.ps1" -Action Start' 'E:\Sample') 'Recognize this installation startup link'
-Assert (-not (Test-SetupStartupOwner '-File "E:\Other\Bridge.ps1" -Action Start' 'E:\Sample')) 'Other installation startup link must not count as enabled'
-Assert (-not (Test-SetupStartupOwner '-File "E:\Sample\Bridge.ps1.extra"' 'E:\Sample')) 'Startup ownership must compare the exact script path'
+$sysDrive = if ($env:SystemDrive) { $env:SystemDrive } else { 'C:' }
+$sampleDir = Join-Path $sysDrive 'Sample'
+$otherDir = Join-Path $sysDrive 'Other'
+Assert (Test-SetupStartupOwner "-NoProfile -File `"$sampleDir\Bridge.ps1`" -Action Start" $sampleDir) 'Recognize this installation startup link'
+Assert (-not (Test-SetupStartupOwner "-File `"$otherDir\Bridge.ps1`" -Action Start" $sampleDir)) 'Other installation startup link must not count as enabled'
+Assert (-not (Test-SetupStartupOwner "-File `"$sampleDir\Bridge.ps1.extra`"" $sampleDir)) 'Startup ownership must compare the exact script path'
 
 $allowed=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'output'))
 $script:Fixture=[IO.Path]::GetFullPath((Join-Path $allowed 'setup-regression'))

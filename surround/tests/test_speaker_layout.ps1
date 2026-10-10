@@ -4,8 +4,19 @@ param([string]$ProbeEndpoint='')
 $ErrorActionPreference='Stop'
 $source=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\source\engine'))
 $build=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'output\speaker-layout-build'))
-$cmake='C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
-if(-not (Test-Path -LiteralPath $cmake)){throw 'Visual Studio CMake is required to compile this native mock test.'}
+$cmd = Get-Command cmake -ErrorAction SilentlyContinue
+$cmake = if ($cmd) { $cmd.Source } else { $null }
+if (-not $cmake) {
+  foreach ($candidate in @(
+    'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe',
+    'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe',
+    'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe',
+    'C:\Program Files\CMake\bin\cmake.exe'
+  )) {
+    if (Test-Path -LiteralPath $candidate) { $cmake = $candidate; break }
+  }
+}
+if (-not $cmake) { throw 'Visual Studio CMake is required to compile this native mock test.' }
 New-Item -ItemType Directory -Path $build -Force | Out-Null
 $enginePath=$source.Replace('\','/')
 $testPath=(Join-Path $PSScriptRoot 'test_speaker_layout.cpp').Replace('\','/')

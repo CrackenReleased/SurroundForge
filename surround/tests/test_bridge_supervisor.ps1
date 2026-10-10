@@ -21,7 +21,11 @@ function Start-Bridge {param([switch]$Recovery,$Intent) $script:starts++;if($scr
 function Stop-Process {param($Id,$Force,$ErrorAction) $script:stops++}
 function Write-SupervisorState {param($Value) $script:saved=$Value}
 function Write-SupervisorLog {param($Message) $script:messages+=$Message}
-$engine='E:\fixture\engine.exe';$root='E:\fixture';$healthPath='health';$PSCommandPath='E:\fixture\Bridge.ps1'
+$sysDrive = if ($env:SystemDrive) { $env:SystemDrive } else { 'C:' }
+$engine = Join-Path $sysDrive 'fixture\engine.exe'
+$root = Join-Path $sysDrive 'fixture'
+$healthPath = 'health'
+$PSCommandPath = Join-Path $root 'Bridge.ps1'
 $script:now=([datetime]'2026-10-10T12:00:00Z').ToUniversalTime()
 function Reset-Fixture {
   $script:fake=[pscustomobject]@{Id=41;Path=$engine;StartTime=$script:now.AddSeconds(-30);HasExited=$false}
@@ -43,7 +47,7 @@ Assert ($starts -eq 1 -and $stops -eq 0) 'Exited process must recover without ki
 Invoke-SupervisorStep $supervisor $state 'run' $now.AddSeconds(2)
 Assert ($starts -eq 2 -and $supervisor.failures -eq 2 -and ([datetime]$supervisor.nextAttemptUtc).ToUniversalTime() -eq $now.AddSeconds(6)) 'Repeated successful launches followed by death must also back off'
 Reset-Fixture
-$fake.Path='E:\other\engine.exe';$launchFails=$true
+$fake.Path=Join-Path $sysDrive 'other\engine.exe';$launchFails=$true
 Invoke-SupervisorStep $supervisor $state 'run' $now
 Assert ($stops -eq 0 -and $starts -eq 1 -and $supervisor.failures -eq 1) 'Reused PID must never be killed'
 Assert (([datetime]$supervisor.nextAttemptUtc).ToUniversalTime() -gt $now) 'Failed launch must back off'
@@ -75,19 +79,19 @@ $fake.Path='C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
 $supervisor | Add-Member NoteProperty processId 41
 $supervisor | Add-Member NoteProperty startedTicks $fake.StartTime.Ticks
 $supervisor | Add-Member NoteProperty executable $fake.Path
-$supervisor | Add-Member NoteProperty scriptPath 'E:\fixture\Bridge.ps1'
-$command='powershell -File "E:\fixture\Bridge.ps1" -Action Watch -Session run'
+$supervisor | Add-Member NoteProperty scriptPath (Join-Path $root 'Bridge.ps1')
+$command="powershell -File `"$root\Bridge.ps1`" -Action Watch -Session run"
 Assert (Test-SupervisorIdentity $supervisor) 'Exact script/process identity must match'
-$command='powershell -File "E:\other\Bridge.ps1" -Action Watch -Session run'
+$command="powershell -File `"$sysDrive\other\Bridge.ps1`" -Action Watch -Session run"
 Assert (-not (Test-SupervisorIdentity $supervisor)) 'Different script must not count as owned'
 $badHealth=$true;$caught=$false
 try {Read-BridgeState | Out-Null} catch {$caught=$true}
 Assert $caught 'Corrupt saved JSON must fail closed before a process can be claimed'
 function Read-BridgeJson {param($Path) $script:supervisor}
-$command='powershell -File "E:\fixture\Bridge.ps1" -Action Watch -Session run';$stops=0
+$command="powershell -File `"$root\Bridge.ps1`" -Action Watch -Session run";$stops=0
 Disable-BridgeSupervisor
 Assert (-not $saved.desiredRunning -and $stops -eq 1) 'Disable must cancel before stopping exact owned watcher'
-$supervisor.desiredRunning=$true;$command='powershell -File "E:\other\Bridge.ps1" -Action Watch -Session run';$stops=0
+$supervisor.desiredRunning=$true;$command="powershell -File `"$sysDrive\other\Bridge.ps1`" -Action Watch -Session run";$stops=0
 Disable-BridgeSupervisor
 Assert (-not $saved.desiredRunning -and $stops -eq 0) 'Disable must leave unrelated/reused watcher PID alone'
 # Exercise cross-thread named lifecycle ownership with real mutexes, no processes/audio.
