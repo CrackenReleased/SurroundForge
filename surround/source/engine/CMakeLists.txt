@@ -118,8 +118,17 @@ stage_ffmpeg_dlls(unit_tests)
 add_test(NAME unit_tests COMMAND unit_tests)
 
 # Explicit Core Audio endpoint control for start/stop scripts (no UI automation).
-add_executable(bridge_control src/BridgeControl.cpp src/ComUtil.cpp src/DeviceEnum.cpp src/Guids.cpp test/WavFile.cpp)
-target_link_libraries(bridge_control PRIVATE ole32)
+add_executable(bridge_control src/BridgeControl.cpp src/ComUtil.cpp src/DeviceEnum.cpp src/Guids.cpp src/CmediaOpticalControl.cpp test/WavFile.cpp)
+target_link_libraries(bridge_control PRIVATE ole32 setupapi hid)
 if(MSVC)
   target_compile_options(bridge_control PRIVATE /permissive-)
 endif()
+
+# Native Win32 System Tray Controller
+add_executable(surround_tray WIN32 src/TrayApp.cpp)
+target_link_libraries(surround_tray PRIVATE shell32 user32 gdi32 ole32)
+if(MSVC)
+  target_compile_options(surround_tray PRIVATE /permissive-)
+endif()
+
+

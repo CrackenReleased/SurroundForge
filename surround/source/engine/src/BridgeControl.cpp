@@ -2,6 +2,7 @@
 // IPolicyConfig ABI reference: github.com/frgnca/AudioDeviceCmdlets/blob/master/SOURCE/IPolicyConfig.cs
 #include "ComUtil.h"
 #include "DeviceEnum.h"
+#include "CmediaOpticalControl.h"
 #include "../test/WavFile.h"
 #include <audioclient.h>
 #include <audiopolicy.h>
@@ -386,7 +387,7 @@ int wmain(int argc, wchar_t** argv)
 {
   const std::wstring command = argc > 1 ? argv[1] : L"--help";
   if (command == L"--help") {
-    std::puts("bridge_control --devices-json | --defaults | --format ID | --speaker-info ID | --sessions ID | --default ID ROLE(0/1/2) | --set-51 ID | --set-mix-51 ID | --play-wav ID PATH | --volume ID | --set-volume ID SCALAR MUTE(0/1) | --measure-loopback ID SECONDS(1..10)");
+    std::puts("bridge_control --devices-json | --defaults | --init-optical [RATE] | --format ID | --speaker-info ID | --sessions ID | --default ID ROLE(0/1/2) | --set-51 ID | --set-mix-51 ID | --play-wav ID PATH | --volume ID | --set-volume ID SCALAR MUTE(0/1) | --measure-loopback ID SECONDS(1..10)");
     return 0;
   }
   ComApartment apartment;
@@ -411,6 +412,19 @@ int wmain(int argc, wchar_t** argv)
       std::printf("%d=%s\n", role, Narrow(info.id.c_str()).c_str());
     }
     return 0;
+  }
+  if (command == L"--init-optical") {
+    int rate = 48000;
+    if (argc >= 3) {
+      rate = std::wcstol(argv[2], nullptr, 10);
+      if (rate <= 0) rate = 48000;
+    }
+    if (CmediaOpticalControl::EnableSpdifOutput(rate)) {
+      std::printf("cmedia_spdif=initialized\nsample_rate=%d\n", rate);
+      return 0;
+    }
+    std::fputs("No C-Media optical device found or failed to write S/PDIF register.\n", stderr);
+    return 1;
   }
   if ((command != L"--format" && command != L"--speaker-info" && command != L"--sessions" && command != L"--set-51" && command != L"--set-mix-51" && command != L"--default" && command != L"--play-wav" && command != L"--volume" && command != L"--set-volume" && command != L"--measure-loopback") ||
       argc != (command == L"--set-volume" ? 5 : command == L"--default" || command == L"--play-wav" || command == L"--measure-loopback" ? 4 : 3)) {

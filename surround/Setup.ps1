@@ -36,7 +36,7 @@ function Get-SetupHardware {
     $attached=$hardware.Count -gt 0
     foreach($device in $hardware) {
       $provider=Get-PnpDeviceProperty -InstanceId $device.InstanceId -KeyName 'DEVPKEY_Device_DriverProvider' -ErrorAction SilentlyContinue
-      if($provider.Data -match '(?i)C[- ]?MEDIA'){$installed=$true}
+      if($provider.Data -match '(?i)C[- ]?MEDIA' -or $provider.Data -match '(?i)Microsoft'){$installed=$true}
     }
   } catch {$errorText='Windows could not check the connected USB adapter. Refresh after connecting it.'}
   return [pscustomobject]@{Attached=$attached;Installed=$installed;ErrorText=$errorText}

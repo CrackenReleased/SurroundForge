@@ -17,6 +17,7 @@ def expect(code, text, *args):
 
 
 expect(0, "--play-wav ID PATH", "--help")
+expect(0, "cmedia_spdif=initialized", "--init-optical", "48000")
 expect(2, "Invalid command", "--unknown")
 expect(2, "exactly match", "--format", "not-an-endpoint")
 expect(2, "ROLE must be exactly", "--default", OPTICAL, "99")
