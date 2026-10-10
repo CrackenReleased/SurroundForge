@@ -33,6 +33,9 @@
 /surround/source/*
 !/surround/source/LICENSE
 !/surround/source/NOTICE.md
+!/surround/source/README.md
+!/surround/source/CLAUDE.md
+!/surround/source/driver/
 !/surround/source/engine/
 !/surround/source/scripts/
 /surround/source/scripts/*
@@ -69,3 +72,11 @@
 *.pem
 *.key
 .DS_Store
+
+# Generated WDK platform trees and attestation output.
+/surround/source/driver/x64/
+/surround/source/driver/ARM64/
+/surround/source/driver/Win32/
+*.cab
+*.ddf
+*.rpt

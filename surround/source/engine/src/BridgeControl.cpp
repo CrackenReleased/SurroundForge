@@ -13,6 +13,7 @@
 #include <cwctype>
 #include <endpointvolume.h>
 #include <devicetopology.h>
+#include <functiondiscoverykeys_devpkey.h>
 #include <cmath>
 
 static std::string JsonString(const std::wstring& value)
@@ -193,7 +194,9 @@ static bool IsCableInput(std::wstring name)
 {
   std::transform(name.begin(), name.end(), name.begin(), [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
   return name == L"cable input (vb-audio virtual cable)" ||
-         name == L"cable in 16ch (vb-audio virtual cable)";
+         name == L"cable in 16ch (vb-audio virtual cable)" ||
+         name.find(L"surroundforge 5.1") == 0 ||
+         name.find(L"virtual ac3 encoder") == 0;
 }
 
 static WAVEFORMATEXTENSIBLE Pcm51()
@@ -382,12 +385,134 @@ static int PlayWav(IMMDevice* dev, const wchar_t* path)
   return Failed("Shared playback timeout", HRESULT_FROM_WIN32(ERROR_TIMEOUT));
 }
 
+static int PlaySpeakerTone(IMMDevice* dev, const std::wstring& speakerIn, const std::wstring& layoutIn)
+{
+  std::wstring spk = speakerIn, lay = layoutIn;
+  std::transform(spk.begin(), spk.end(), spk.begin(), [](wchar_t c) { return static_cast<wchar_t>(std::towupper(c)); });
+  std::transform(lay.begin(), lay.end(), lay.begin(), [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
+  if (lay != L"stereo" && lay != L"2.0" && lay != L"5.1" && lay != L"7.1") return 2;
+
+  double freq = 0.0, modHz = 0.0;
+  float gains[6] = {0, 0, 0, 0, 0, 0};
+  const bool isStereo = (lay == L"stereo" || lay == L"2.0");
+  const bool is71 = (lay == L"7.1");
+
+  // Harmonic series rooted at G3 = 196.00 Hz
+  if (spk == L"FL") {
+    freq = 196.00; gains[0] = 1.0f;
+  } else if (spk == L"FC") {
+    freq = 246.94;
+    if (isStereo) { gains[0] = 0.707f; gains[1] = 0.707f; } else { gains[2] = 1.0f; }
+  } else if (spk == L"FR") {
+    freq = 293.66; gains[1] = 1.0f;
+  } else if (spk == L"LFE") {
+    freq = 55.00; modHz = 3.5;
+    if (isStereo) { gains[0] = 0.707f; gains[1] = 0.707f; } else { gains[3] = 1.0f; }
+  } else if (spk == L"BL") {
+    freq = 329.63; modHz = 5.5;
+    if (isStereo) { gains[0] = 0.85f; } else { gains[4] = 1.0f; }
+  } else if (spk == L"BR") {
+    freq = 369.99; modHz = 5.5;
+    if (isStereo) { gains[1] = 0.85f; } else { gains[5] = 1.0f; }
+  } else if (spk == L"SL") {
+    freq = 392.00; modHz = 8.5;
+    if (isStereo) { gains[0] = 0.9f; }
+    else if (is71) { gains[4] = 0.85f; gains[0] = 0.42f; }
+    else { gains[4] = 1.0f; }
+  } else if (spk == L"SR") {
+    freq = 440.00; modHz = 8.5;
+    if (isStereo) { gains[1] = 0.9f; }
+    else if (is71) { gains[5] = 0.85f; gains[1] = 0.42f; }
+    else { gains[5] = 1.0f; }
+  } else {
+    return 2;
+  }
+
+  constexpr size_t kRate = 48000;
+  constexpr size_t kFrames = 40800; // 0.85s
+  std::vector<int16_t> pcm(kFrames * 6, 0);
+  const double twoPi = 6.283185307179586;
+  for (size_t i = 0; i < kFrames; ++i) {
+    const double t = static_cast<double>(i) / static_cast<double>(kRate);
+    const double dur = static_cast<double>(kFrames) / static_cast<double>(kRate);
+    double env = 1.0;
+    if (t < 0.025) env = 0.5 * (1.0 - std::cos(3.141592653589793 * (t / 0.025)));
+    else if (t > dur - 0.12) env = 0.5 * (1.0 + std::cos(3.141592653589793 * ((t - (dur - 0.12)) / 0.12)));
+    env *= std::exp(-1.4 * t);
+
+    double mod = modHz > 0.0 ? (0.72 + 0.28 * std::sin(twoPi * modHz * t)) : 1.0;
+    double wave = 0.0;
+    if (spk == L"LFE") {
+      wave = 0.75 * std::sin(twoPi * 55.0 * t) + 0.25 * std::sin(twoPi * 98.0 * t);
+    } else {
+      wave = 0.68 * std::sin(twoPi * freq * t)
+           + 0.22 * std::sin(twoPi * (freq * 2.0) * t) * std::exp(-2.2 * t)
+           + 0.10 * std::sin(twoPi * (freq * 3.0) * t) * std::exp(-3.5 * t);
+    }
+    const double sampleVal = 14000.0 * env * mod * wave;
+    for (int ch = 0; ch < 6; ++ch) {
+      if (gains[ch] > 0.0f) {
+        double v = sampleVal * gains[ch];
+        if (v > 32760.0) v = 32760.0;
+        if (v < -32760.0) v = -32760.0;
+        pcm[i * 6 + ch] = static_cast<int16_t>(v);
+      }
+    }
+  }
+
+  ComPtr<IAudioClient> client;
+  HRESULT hr = dev->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, &client);
+  if (FAILED(hr)) return Failed("Activate shared speaker test", hr);
+  auto format = Pcm51();
+  hr = client->Initialize(AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_NOPERSIST | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
+                          1000000, 0, &format.Format, nullptr);
+  if (FAILED(hr)) return Failed("Initialize shared speaker test", hr);
+  UINT32 capacity = 0;
+  hr = client->GetBufferSize(&capacity);
+  if (FAILED(hr) || !capacity) return Failed("GetBufferSize", FAILED(hr) ? hr : E_UNEXPECTED);
+  ComPtr<IAudioRenderClient> render;
+  hr = client->GetService(__uuidof(IAudioRenderClient), &render);
+  if (FAILED(hr)) return Failed("Get shared render service", hr);
+  const UINT32 first = static_cast<UINT32>(std::min<size_t>(capacity, kFrames));
+  BYTE* samples = nullptr;
+  hr = render->GetBuffer(first, &samples);
+  if (FAILED(hr)) return Failed("Prime speaker buffer", hr);
+  std::memcpy(samples, pcm.data(), first * 6 * sizeof(int16_t));
+  hr = render->ReleaseBuffer(first, 0);
+  if (FAILED(hr)) return Failed("Release primed speaker buffer", hr);
+  hr = client->Start();
+  if (FAILED(hr)) return Failed("Start shared speaker test", hr);
+  struct StopOnExit { IAudioClient* client; ~StopOnExit() { client->Stop(); } } stop{client.Get()};
+  size_t offset = first;
+  const ULONGLONG deadline = GetTickCount64() + 4000;
+  while (GetTickCount64() < deadline) {
+    UINT32 padding = 0;
+    hr = client->GetCurrentPadding(&padding);
+    if (FAILED(hr)) return Failed("GetCurrentPadding", hr);
+    if (offset == kFrames && padding == 0) {
+      std::printf("speaker_tone=%s\nlayout=%s\nfreq=%.2f\n", Narrow(spk.c_str()).c_str(), Narrow(lay.c_str()).c_str(), freq);
+      return 0;
+    }
+    const UINT32 count = static_cast<UINT32>(std::min<size_t>(capacity - padding, kFrames - offset));
+    if (count) {
+      hr = render->GetBuffer(count, &samples);
+      if (FAILED(hr)) return Failed("Get shared speaker buffer", hr);
+      std::memcpy(samples, pcm.data() + offset * 6, count * 6 * sizeof(int16_t));
+      hr = render->ReleaseBuffer(count, 0);
+      if (FAILED(hr)) return Failed("Release shared speaker buffer", hr);
+      offset += count;
+    }
+    Sleep(5);
+  }
+  return Failed("Speaker tone timeout", HRESULT_FROM_WIN32(ERROR_TIMEOUT));
+}
+
 #ifndef BRIDGE_SPEAKER_LAYOUT_TEST
 int wmain(int argc, wchar_t** argv)
 {
   const std::wstring command = argc > 1 ? argv[1] : L"--help";
   if (command == L"--help") {
-    std::puts("bridge_control --devices-json | --defaults | --init-optical [RATE] | --format ID | --speaker-info ID | --sessions ID | --default ID ROLE(0/1/2) | --set-51 ID | --set-mix-51 ID | --play-wav ID PATH | --volume ID | --set-volume ID SCALAR MUTE(0/1) | --measure-loopback ID SECONDS(1..10)");
+    std::puts("bridge_control --devices-json | --defaults | --init-optical [RATE] | --format ID | --speaker-info ID | --sessions ID | --default ID ROLE(0/1/2) | --set-51 ID | --set-mix-51 ID | --play-wav ID PATH | --tone-speaker ID SPEAKER LAYOUT | --volume ID | --set-volume ID SCALAR MUTE(0/1) | --measure-loopback ID SECONDS(1..10)");
     return 0;
   }
   ComApartment apartment;
@@ -426,8 +551,8 @@ int wmain(int argc, wchar_t** argv)
     std::fputs("No C-Media optical device found or failed to write S/PDIF register.\n", stderr);
     return 1;
   }
-  if ((command != L"--format" && command != L"--speaker-info" && command != L"--sessions" && command != L"--set-51" && command != L"--set-mix-51" && command != L"--default" && command != L"--play-wav" && command != L"--volume" && command != L"--set-volume" && command != L"--measure-loopback") ||
-      argc != (command == L"--set-volume" ? 5 : command == L"--default" || command == L"--play-wav" || command == L"--measure-loopback" ? 4 : 3)) {
+  if ((command != L"--format" && command != L"--speaker-info" && command != L"--sessions" && command != L"--set-51" && command != L"--set-mix-51" && command != L"--default" && command != L"--play-wav" && command != L"--tone-speaker" && command != L"--volume" && command != L"--set-volume" && command != L"--measure-loopback") ||
+      argc != (command == L"--set-volume" || command == L"--tone-speaker" ? 5 : command == L"--default" || command == L"--play-wav" || command == L"--measure-loopback" ? 4 : 3)) {
     std::fputs("Invalid command or arguments. Run --help.\n", stderr);
     return 2;
   }
@@ -447,11 +572,12 @@ int wmain(int argc, wchar_t** argv)
   if (command == L"--set-volume" && !IsCableInput(selected.name)) return 2;
   if (command == L"--set-volume") return Volume(dev.Get(), argv[3], argv[4]);
   if (command == L"--measure-loopback") return Measure(dev.Get(), argv[3]);
-  if ((command == L"--set-51" || command == L"--set-mix-51" || command == L"--play-wav") && !IsCableInput(selected.name)) {
+  if ((command == L"--set-51" || command == L"--set-mix-51" || command == L"--play-wav" || command == L"--tone-speaker") && !IsCableInput(selected.name)) {
     std::fputs("Format setting and WAV playback are restricted to CABLE Input or CABLE In 16ch (VB-Audio Virtual Cable).\n", stderr);
     return 2;
   }
   if (command == L"--play-wav") return PlayWav(dev.Get(), argv[3]);
+  if (command == L"--tone-speaker") return PlaySpeakerTone(dev.Get(), argv[3], argv[4]);
   if (command == L"--default" && std::wstring(argv[3]) != L"0" &&
       std::wstring(argv[3]) != L"1" && std::wstring(argv[3]) != L"2") {
     std::fputs("ROLE must be exactly 0, 1, or 2.\n", stderr);
@@ -485,6 +611,28 @@ int wmain(int argc, wchar_t** argv)
     if (hr != S_OK) return Failed("Hardware 5.1 PCM format support", hr);
   }
   client.Reset();
+  hr = policy->SetDeviceFormat(id.c_str(), &format.Format, &format.Format);
+  if (FAILED(hr)) return Failed("SetDeviceFormat", hr);
+  {
+    PROPVARIANT desc{}, adapter{}, physMask{};
+    desc.vt = VT_LPWSTR;
+    desc.pwszVal = const_cast<LPWSTR>(L"SurroundForge 5.1");
+    adapter.vt = VT_LPWSTR;
+    adapter.pwszVal = const_cast<LPWSTR>(L"SurroundForge Audio");
+    physMask.vt = VT_UI4;
+    physMask.ulVal = 0x3f;
+    policy->SetPropertyValue(id.c_str(), FALSE, PKEY_Device_DeviceDesc, &desc);
+    policy->SetPropertyValue(id.c_str(), FALSE, PKEY_DeviceInterface_FriendlyName, &adapter);
+    policy->SetPropertyValue(id.c_str(), FALSE, PKEY_AudioEndpoint_PhysicalSpeakers, &physMask);
+    policy->SetPropertyValue(id.c_str(), TRUE, PKEY_AudioEndpoint_PhysicalSpeakers, &physMask);
+    ComPtr<IPropertyStore> writable;
+    if (SUCCEEDED(dev->OpenPropertyStore(STGM_READWRITE, &writable))) {
+      writable->SetValue(PKEY_Device_DeviceDesc, desc);
+      writable->SetValue(PKEY_DeviceInterface_FriendlyName, adapter);
+      writable->SetValue(PKEY_AudioEndpoint_PhysicalSpeakers, physMask);
+      writable->Commit();
+    }
+  }
   if (command == L"--set-51") {
     hr = EnsureSpeakerMask51(dev.Get());
     if (FAILED(hr)) {
@@ -492,9 +640,9 @@ int wmain(int argc, wchar_t** argv)
         std::fputs("Windows needs administrator permission once to save this VB-CABLE speaker layout. Run setup as administrator; no default endpoint was changed.\n", stderr);
       return Failed("Persist 5.1 speaker assignments", hr);
     }
+  } else {
+    EnsureSpeakerMask51(dev.Get());
   }
-  hr = policy->SetDeviceFormat(id.c_str(), &format.Format, &format.Format);
-  if (FAILED(hr)) return Failed("SetDeviceFormat", hr);
   WAVEFORMATEX* actual = nullptr;
   hr = Mix(dev.Get(), &actual);
   if (FAILED(hr)) return Failed("Verify mix format", hr);

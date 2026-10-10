@@ -68,7 +68,11 @@ int main()
   SpeakerStore dropped; dropped.loseOnCommit = true;
   REQUIRE_LAYOUT(PersistSpeakerMask51(&dropped) == E_FAIL); // Successful API return alone is insufficient.
   REQUIRE_LAYOUT(IsCableInput(L"CABLE In 16ch (VB-Audio Virtual Cable)"));
+  REQUIRE_LAYOUT(IsCableInput(L"SurroundForge 5.1 (VB-Audio Virtual Cable)"));
+  REQUIRE_LAYOUT(IsCableInput(L"SurroundForge 5.1 (SurroundForge Audio)"));
+  REQUIRE_LAYOUT(IsCableInput(L"SurroundForge 5.1"));
   REQUIRE_LAYOUT(!IsCableInput(L"SPDIF Out (USB Sound Device)"));
+  REQUIRE_LAYOUT(!IsCableInput(L"Speakers (Realtek(R) Audio)"));
   std::puts("PASS: unassigned six-channel mix rejected; missing physical speaker mask saved/committed/verified; idempotence, access/commit/readback failures and physical-adapter guard");
   return 0;
 }

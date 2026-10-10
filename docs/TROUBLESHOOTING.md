@@ -2,7 +2,7 @@
 
 ## Windows says two channels on optical output
 
-The physical S/PDIF endpoint's two-channel carrier setting does not describe the game's decoded AC3 channel count. Games should output to the configured **CABLE In 16ch** virtual input, which SurroundForge configures to six assigned channels. The bridge encodes those channels for the receiver.
+The physical S/PDIF endpoint's two-channel carrier setting does not describe the game's decoded AC3 channel count. Games should output to the configured **SurroundForge 5.1** / **CABLE In 16ch** virtual input, which SurroundForge configures to six assigned channels. The bridge encodes those channels for the receiver.
 
 ## Surround disappears after reboot
 
@@ -70,3 +70,11 @@ Menu music and startup videos can be stereo even when racing audio is surround. 
 Diagnostics preserves endpoint format, defaults, volume/mute, audio sessions, bridge/health/supervisor state and logs, channel history and recent relevant Windows events in a timestamped local folder. Open `.evtx` exports with **Event Viewer → Action → Open Saved Log**. Disabled event channels are not enabled; missing/unavailable channels are reported in the snapshot.
 
 Private device IDs and event data belong to the computer that produced them. Share a reviewed/redacted bundle only when needed. The original local investigation and rollback settings remain in the ignored diagnostic folders.
+
+## Directory migration and custom driver identity
+
+The canonical checkout on this machine is `E:\SurroundForge`. If builds fail with an `audio-diagnostics` path, configure a fresh CMake build as described in [BUILD.md](BUILD.md#canonical-directory-and-moved-builds). Generated build caches retain absolute paths after a directory move; source scripts resolve paths relative to their own location.
+
+`SurroundForge 5.1 (VB-Audio Virtual Cable)` is the branded verified vendor endpoint. `SurroundForge 5.1 (SurroundForge Audio)` is the endpoint advertised by the custom WaveRT source. Branding a VB-CABLE endpoint does not install the custom driver. No native-driver package has been built or verified here; see [driver status](../surround/source/driver/README.md).
+
+Inspect `SurroundForge.lnk` in the Windows Startup folder if sign-in launch fails after a move. Its arguments and working directory should point to the installation that owns the bridge. Re-enable startup deliberately from that installation; do not guess new process ownership from stale state.

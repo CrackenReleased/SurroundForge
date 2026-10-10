@@ -1,0 +1,155 @@
+;/*++
+;
+;Copyright (c) Microsoft Corporation All Rights Reserved
+;Copyright (c) 2026 Cracken Released, LLC
+;
+;Module Name:
+;    SimpleAudioSample.inx
+;
+;Abstract:
+;    INF file for installing the SurroundForge 5.1 Virtual Audio WaveRT Driver
+;
+;--*/
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = MEDIA
+Provider    = %ProviderName%
+ClassGuid   = {4d36e96c-e325-11ce-bfc1-08002be10318}
+DriverVer   = 10/10/2026, 1.0.0.1
+CatalogFile = SimpleAudioSample.cat
+PnpLockDown = 1
+
+[DefaultInstall.NT$ARCH$]
+Needs = SimpleAudioSample
+
+[SourceDisksNames]
+222 = %DiskDescription%,"",222
+
+[SourceDisksFiles]
+SimpleAudioSample.sys = 222
+
+[Manufacturer]
+%MfgName% = SimpleAudioSampleSection,NT$ARCH$.10.0...14310
+
+[SimpleAudioSampleSection.NT$ARCH$.10.0...14310]
+%SimpleAudioSample.DeviceDesc% = SimpleAudioSample, ROOT\SurroundForgeAudio
+%SimpleAudioSample.DeviceDesc% = SimpleAudioSample, ROOT\SimpleAudioSample
+
+[DestinationDirs]
+SimpleAudioSample.CopyList = 12 ; DIRID_DRIVERS = %windir%\system32\Drivers
+
+;======================================================
+; SimpleAudioSample (SurroundForge 5.1 Virtual Audio)
+;======================================================
+[SimpleAudioSample.CopyList]
+SimpleAudioSample.sys
+
+[SimpleAudioSample.AddReg]
+HKR,,AssociatedFilters,,"wdmaud,swmidi,redbook"
+HKR,,Driver,,SimpleAudioSample.sys
+
+HKR,Drivers,SubClasses,,"wave,midi,mixer"
+
+HKR,Drivers\wave\wdmaud.drv,Driver,,wdmaud.drv
+HKR,Drivers\midi\wdmaud.drv,Driver,,wdmaud.drv
+HKR,Drivers\mixer\wdmaud.drv,Driver,,wdmaud.drv
+
+HKR,Drivers\wave\wdmaud.drv,Description,,%SimpleAudioSample.DeviceDesc%
+HKR,Drivers\midi\wdmaud.drv,Description,,%SimpleAudioSample.DeviceDesc%
+HKR,Drivers\mixer\wdmaud.drv,Description,,%SimpleAudioSample.DeviceDesc%
+
+;======================================================
+; render interfaces: speaker (5.1 virtual sink)
+;======================================================
+[SimpleAudioSample.I.WaveSpeaker]
+AddReg = SimpleAudioSample.I.WaveSpeaker.AddReg
+
+[SimpleAudioSample.I.WaveSpeaker.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%SimpleAudioSample.WaveSpeaker.szPname%
+
+[SimpleAudioSample.I.TopologySpeaker]
+AddReg = SimpleAudioSample.I.TopologySpeaker.AddReg
+
+[SimpleAudioSample.I.TopologySpeaker.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%SimpleAudioSample.TopologySpeaker.szPname%
+; The following lines opt-in to pull mode.
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,%REG_BINARY%,41,00,00,00,28,00,00,00,FE,FF,06,00,80,BB,00,00,00,CA,08,00,0C,00,10,00,16,00,10,00,3F,00,00,00,01,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
+; Persist 5.1 physical speaker mask (FL|FR|FC|LFE|BL|BR = 0x3f) across reboots
+HKR,EP\0,%PKEY_AudioEndpoint_PhysicalSpeakers%,0x00010001,0x0000003f
+
+;======================================================
+; KS Categories
+;======================================================
+[KsCategories]
+HKLM,%MediaCategories%\%SimpleAudioSample.NameGuid%,Name,,%SimpleAudioSample.Name%
+
+;======================================================
+; COMMON
+;======================================================
+[SimpleAudioSample.NT$ARCH$]
+Include   = ks.inf, wdmaudio.inf
+Needs     = KS.Registration, WDMAUDIO.Registration, MsApoFxProxy.Registration
+CopyFiles = SimpleAudioSample.CopyList
+AddReg    = SimpleAudioSample.AddReg, KsCategories
+
+[SimpleAudioSample.NT$ARCH$.Interfaces]
+; Interfaces for speaker (external: Virginia) render endpoint.
+AddInterface = %KSCATEGORY_AUDIO%,    %KSNAME_WaveSpeaker%,     SimpleAudioSample.I.WaveSpeaker
+AddInterface = %KSCATEGORY_RENDER%,   %KSNAME_WaveSpeaker%,     SimpleAudioSample.I.WaveSpeaker
+AddInterface = %KSCATEGORY_REALTIME%, %KSNAME_WaveSpeaker%,     SimpleAudioSample.I.WaveSpeaker
+AddInterface = %KSCATEGORY_AUDIO%,    %KSNAME_TopologySpeaker%, SimpleAudioSample.I.TopologySpeaker
+AddInterface = %KSCATEGORY_TOPOLOGY%, %KSNAME_TopologySpeaker%, SimpleAudioSample.I.TopologySpeaker
+
+[SimpleAudioSample.NT$ARCH$.Services]
+AddService = SimpleAudioSample,0x00000002,SimpleAudioSample_Service_Inst
+
+[SimpleAudioSample_Service_Inst]
+DisplayName   = %SimpleAudioSample.SvcDesc%
+ServiceType   = 1 ; SERVICE_KERNEL_DRIVER
+StartType     = 3 ; SERVICE_DEMAND_START
+ErrorControl  = 1 ; SERVICE_ERROR_NORMAL
+ServiceBinary = %12%\SimpleAudioSample.sys
+
+;======================================================
+; Maverick/Virginia Strings
+;======================================================
+[Strings]
+ProviderName = "Cracken Released, LLC"
+MfgName      = "Cracken Released, LLC"
+
+DiskDescription = "SurroundForge 5.1 Virtual Audio Installation Media"
+SimpleAudioSample.DeviceDesc = "SurroundForge Audio"
+SimpleAudioSample.SvcDesc    = "SurroundForge 5.1 Virtual Audio Service"
+
+Proxy.CLSID        = "{17CCA71B-ECD7-11D0-B908-00A0C9223196}"
+KSCATEGORY_AUDIO   = "{6994AD04-93EF-11D0-A3CC-00A0C9223196}"
+KSCATEGORY_RENDER  = "{65E8773E-8F56-11D0-A3B9-00A0C9223196}"
+KSCATEGORY_CAPTURE = "{65E8773D-8F56-11D0-A3B9-00A0C9223196}"
+KSCATEGORY_REALTIME = "{EB115FFC-10C8-4964-831D-6DCB02E6F23F}"
+KSCATEGORY_TOPOLOGY = "{DDA54A40-1E4C-11D1-A050-405705C10000}"
+
+KSNAME_WaveSpeaker     = "WaveSpeaker"
+KSNAME_TopologySpeaker = "TopologySpeaker"
+
+SimpleAudioSample.WaveSpeaker.szPname     = "SurroundForge 5.1"
+SimpleAudioSample.TopologySpeaker.szPname = "SurroundForge 5.1 Topology"
+
+MediaCategories = "SYSTEM\CurrentControlSet\Control\MediaCategories"
+SimpleAudioSample.NameGuid = "{be762f5a-902f-479f-b860-d475cd5c5222}"
+SimpleAudioSample.Name     = "SurroundForge 5.1"
+
+PKEY_AudioEndpoint_ControlPanelPageProvider = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},1"
+PKEY_AudioEndpoint_Association              = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},2"
+PKEY_AudioEndpoint_PhysicalSpeakers         = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},3"
+PKEY_AudioEngine_OEMFormat                  = "{E4870E26-3CC5-4CD2-BA46-CA0A9A70ED04},3"
+
+AUDIO_SIGNALPROCESSINGMODE_DEFAULT = "{C18E2F7E-933D-4965-B7D1-1EEF228D2AF3}"
+KSNODETYPE_ANY   = "{00000000-0000-0000-0000-000000000000}"
+
+REG_BINARY          = 0x00000001
+REG_DWORD           = 0x00010001
+REG_MULTI_SZ        = 0x00010000
