@@ -35,9 +35,9 @@
 !/surround/source/NOTICE.md
 !/surround/source/engine/
 !/surround/source/scripts/
-!/surround/source/third_party/
 /surround/source/scripts/*
 !/surround/source/scripts/fetch-ffmpeg.ps1
+!/surround/source/scripts/make-test-wav.ps1
 /surround/source/third_party/*
 !/surround/source/third_party/doctest/
 !/surround/source/third_party/doctest/doctest.h

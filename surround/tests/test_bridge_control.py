@@ -12,8 +12,8 @@ try:
     CABLE = DEVICES["in_id"]
     has_live_config = True
 except Exception:
-    OPTICAL = "{0.0.0.00000000}.{00000000-0000-0000-0000-000000000001}"
-    CABLE = "{0.0.0.00000000}.{00000000-0000-0000-0000-000000000002}"
+    OPTICAL = "mock-optical-endpoint-id"
+    CABLE = "mock-cable-endpoint-id"
     has_live_config = False
 
 
@@ -32,7 +32,10 @@ assert (res_opt.returncode == 0 and "cmedia_spdif=initialized" in res_opt.stdout
 
 expect(2, "Invalid command", "--unknown")
 expect(2, "exactly match", "--format", "not-an-endpoint")
-expect(2, "ROLE must be exactly", "--default", OPTICAL, "99")
+if has_live_config:
+    expect(2, "ROLE must be exactly", "--default", OPTICAL, "99")
+else:
+    expect(2, "must exactly match", "--default", OPTICAL, "99")
 expect(2, "restricted to", "--set-51", OPTICAL)
 expect(2, "restricted to", "--set-mix-51", OPTICAL)
 expect(2, "restricted to", "--play-wav", OPTICAL, str(ROOT / "tests/output/sequential_5p1.wav"))
