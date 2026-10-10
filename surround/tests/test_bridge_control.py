@@ -49,7 +49,7 @@ else:
     res_def = subprocess.run([str(CONTROL), "--defaults"], capture_output=True, text=True)
     assert (res_def.returncode == 0 and "0=" in res_def.stdout) or \
            (res_def.returncode == 1 and "No default render endpoint" in res_def.stderr), res_def
-    expect(1, "must exactly match", "--volume", CABLE)
+    expect(2, "must exactly match", "--volume", CABLE)
 expect(2, "", "--set-volume", OPTICAL, "0.1", "0")
 expect(2, "", "--set-volume", CABLE, "nan", "0")
 expect(2, "", "--set-volume", CABLE, "1.1", "0")
