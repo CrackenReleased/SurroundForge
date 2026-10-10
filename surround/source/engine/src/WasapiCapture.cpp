@@ -33,6 +33,10 @@ bool WasapiCapture::Init(IMMDevice* dev, bool loopback, bool followEndpointVolum
     fmt_.channelMask = ext->dwChannelMask;
     fmt_.isFloat = (ext->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT);
   }
+  if(!fmt_.channels || fmt_.channels>64 || !fmt_.sampleRate || !fmt_.bytesPerFrame() ||
+     (fmt_.isFloat?fmt_.bits!=32:(fmt_.bits!=16 && fmt_.bits!=32))) {
+    CoTaskMemFree(mix);std::fputs("Unsupported capture PCM format.\n",stderr);return false;
+  }
 
   // Shared mode. Loopback streams cannot be event-driven, so they are polled instead.
   // periodicity must be 0 in shared mode.
@@ -69,6 +73,7 @@ bool WasapiCapture::Init(IMMDevice* dev, bool loopback, bool followEndpointVolum
 
 bool WasapiCapture::Start()
 {
+  if(health_.Failed())return false;
   if (!ring_)
   {
     std::fprintf(stderr, "[WasapiCapture] SetRing() not called before Start()\n");
@@ -76,16 +81,21 @@ bool WasapiCapture::Start()
   }
   if (running_.exchange(true))
     return true;
-  ResetEvent(stopEvent_);
-  HR_FAIL(client_->Start(), "client Start");
-  thread_ = std::thread(&WasapiCapture::ThreadProc, this);
+  if(!ResetEvent(stopEvent_)) { health_.Fail("capture_reset_event",HRESULT_FROM_WIN32(GetLastError()));running_=false;return false; }
+  if(!health_.Check(client_->Start(),"capture_start")) { running_=false;return false; }
+  try {
+    thread_=std::thread([this] {
+      try { ThreadProc(); }
+      catch(...) { health_.Fail("capture_worker_exception"); }
+      running_=false;
+    });
+  } catch(...) { health_.Fail("capture_start_exception");running_=false;client_->Stop();return false; }
   return true;
 }
 
 void WasapiCapture::Stop()
 {
-  if (!running_.exchange(false))
-    return;
+  running_=false;
   if (stopEvent_) SetEvent(stopEvent_);
   if (thread_.joinable()) thread_.join();
   if (client_) client_->Stop();
@@ -94,40 +104,46 @@ void WasapiCapture::Stop()
 void WasapiCapture::ThreadProc()
 {
   ComApartment apartment;
-  DWORD taskIndex = 0;
-  HANDLE mmcss = AvSetMmThreadCharacteristicsW(L"Pro Audio", &taskIndex);
+  if(!health_.Check(apartment.hr,"capture_com_init"))return;
+  AudioThreadPriority priority;
 
   const size_t bpf = fmt_.bytesPerFrame();
   std::vector<uint8_t> scaled;
-  bool volumeFailed = false;
 
   auto drain = [&]() {
+    ++health_.progress;
     float gain = 1;
     if (volume_) {
       float db = 0, scalar = 0; BOOL muted = TRUE;
-      const bool ok = apartment.ok() && SUCCEEDED(volume_->GetMasterVolumeLevel(&db)) &&
+      const bool ok = SUCCEEDED(volume_->GetMasterVolumeLevel(&db)) &&
         SUCCEEDED(volume_->GetMasterVolumeLevelScalar(&scalar)) && SUCCEEDED(volume_->GetMute(&muted));
-      gain = ok ? EndpointGain(db, scalar, muted != FALSE) : 0;
-      if (!ok && !volumeFailed)
-        std::fputs("[WasapiCapture] Cannot read endpoint volume; muting until it recovers.\n", stderr);
-      volumeFailed = !ok;
+      const bool readable=ok && std::isfinite(db) && std::isfinite(scalar) && scalar>=0 && scalar<=1;
+      gain = health_.VolumeRead(readable,AudioNowMs()) ? EndpointGain(db, scalar, muted != FALSE) : 0;
+      if(health_.Failed())return;
     }
     UINT32 packet = 0;
-    while (SUCCEEDED(capture_->GetNextPacketSize(&packet)) && packet > 0)
+    while (running_.load() && health_.Check(capture_->GetNextPacketSize(&packet),"capture_next_packet") && packet > 0)
     {
       BYTE* data = nullptr;
       UINT32 frames = 0;
       DWORD flags = 0;
-      if (FAILED(capture_->GetBuffer(&data, &frames, &flags, nullptr, nullptr)))
+      const HRESULT bufferHr=capture_->GetBuffer(&data,&frames,&flags,nullptr,nullptr);
+      if(bufferHr==AUDCLNT_S_BUFFER_EMPTY)break; // legitimate race: no acquired buffer
+      if (!health_.Check(bufferHr,"capture_get_buffer"))
         break;
 
+      health_.frames+=frames;
+      if(flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY)++health_.discontinuities;
+
       const size_t bytes = static_cast<size_t>(frames) * bpf;
+      auto write=[&](const void* samples) { if(ring_->Write(samples,bytes)!=bytes)++health_.droppedPackets; };
+      try {
       if (flags & AUDCLNT_BUFFERFLAGS_SILENT)
       {
         // Push silence so the timeline stays continuous.
         static thread_local std::vector<uint8_t> zeros;
         if (zeros.size() < bytes) zeros.assign(bytes, 0);
-        ring_->Write(zeros.data(), bytes);
+        write(zeros.data());
       }
       else if (data)
       {
@@ -146,36 +162,41 @@ void WasapiCapture::ThreadProc()
         if (volume_) {
           if (scaled.size() < bytes) scaled.resize(bytes);
           ApplyPcmVolume(scaled.data(), data, bytes, gain);
-          ring_->Write(scaled.data(), bytes);
+          write(scaled.data());
         } else {
-          ring_->Write(data, bytes); // overflow is dropped by the ring (consumer trims drift)
+          write(data); // overflow drops the whole packet (consumer trims drift)
         }
       }
-      capture_->ReleaseBuffer(frames);
+      else health_.Fail("capture_null_buffer");
+      } catch(...) { capture_->ReleaseBuffer(frames);throw; }
+      if(!health_.Check(capture_->ReleaseBuffer(frames),"capture_release_buffer") || health_.Failed())break;
+      ++health_.progress; // large backlogs still demonstrate a responsive capture worker
     }
   };
 
   if (loopback_)
   {
     // Loopback streams aren't event-driven: poll, waking early if asked to stop.
-    while (running_.load(std::memory_order_relaxed))
+    while (running_.load(std::memory_order_relaxed) && !health_.Failed())
     {
-      if (WaitForSingleObject(stopEvent_, 5) == WAIT_OBJECT_0) // ~5 ms poll
+      const DWORD wait=WaitForSingleObject(stopEvent_,5);
+      if (wait == WAIT_OBJECT_0) // ~5 ms poll
         break;
+      if(wait!=WAIT_TIMEOUT) { health_.Fail("capture_wait_failed",HRESULT_FROM_WIN32(GetLastError()));break; }
       drain();
     }
   }
   else
   {
     HANDLE waits[2] = { dataEvent_, stopEvent_ };
-    while (running_.load(std::memory_order_relaxed))
+    while (running_.load(std::memory_order_relaxed) && !health_.Failed())
     {
-      DWORD w = WaitForMultipleObjects(2, waits, FALSE, INFINITE);
+      DWORD w = WaitForMultipleObjects(2, waits, FALSE, 1000);
       if (w == WAIT_OBJECT_0 + 1) // stop
         break;
+      if(w!=WAIT_OBJECT_0 && w!=WAIT_TIMEOUT) { health_.Fail("capture_wait_failed",HRESULT_FROM_WIN32(GetLastError()));break; }
       drain();
     }
   }
 
-  if (mmcss) AvRevertMmThreadCharacteristics(mmcss);
 }

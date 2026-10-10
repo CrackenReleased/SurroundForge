@@ -2,15 +2,21 @@
 /*
 !/.gitignore
 !/.gitattributes
+!/.github/
+!/.github/**
 !/README.md
 !/AGENTS.md
 !/changelog.md
 !/docs/
 !/surround/
+!/Run-Tests.ps1
+!/Test.cmd
 
 /surround/*
 !/surround/Bridge.ps1
 !/surround/Setup.ps1
+!/surround/Tray.ps1
+!/surround/Restart 5.1.cmd
 !/surround/Start 5.1.cmd
 !/surround/Stop 5.1.cmd
 !/surround/tests/

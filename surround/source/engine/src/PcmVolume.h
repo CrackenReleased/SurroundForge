@@ -13,11 +13,14 @@ inline float EndpointGain(float db, float scalar, bool muted)
 
 inline void ApplyPcmVolume(void* destination, const void* source, size_t bytes, float gain)
 {
-  if (gain == 0) { std::memset(destination, 0, bytes); return; }
+  if (gain <= 0 || !std::isfinite(gain) || bytes % sizeof(float)) {
+    std::memset(destination, 0, bytes); return;
+  }
   for (size_t offset = 0; offset < bytes; offset += sizeof(float)) {
     float sample;
     std::memcpy(&sample, static_cast<const unsigned char*>(source) + offset, sizeof(sample));
     sample *= gain;
+    if (!std::isfinite(sample)) sample = 0;
     std::memcpy(static_cast<unsigned char*>(destination) + offset, &sample, sizeof(sample));
   }
 }

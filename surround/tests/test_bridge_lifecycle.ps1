@@ -6,8 +6,9 @@ $ast=[System.Management.Automation.Language.Parser]::ParseFile($scriptPath,[ref]
 if($errors.Count){throw $errors[0]}
 $functions=$ast.FindAll({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst]},$false)
 foreach($definition in $functions){Invoke-Expression $definition.Extent.Text}
-$stopBranch=$ast.FindAll({param($node) $node -is [System.Management.Automation.Language.IfStatementAst] -and $node.Extent.Text -match "^if\(\`$Action -eq 'Stop'\)"},$false)[0].Clauses[0].Item2
-$startupCatch=$ast.FindAll({param($node) $node -is [System.Management.Automation.Language.TryStatementAst]},$false) | Select-Object -Last 1
+$stopBranch=$ast.FindAll({param($node) $node -is [System.Management.Automation.Language.IfStatementAst] -and $node.Extent.Text -match "^if\(\`$Action -eq 'Stop'\)" -and $node.Extent.Text -match 'Stop-BridgeAndRestore'},$true)[0].Clauses[0].Item2
+$startFunction=$functions | Where-Object Name -eq 'Start-Bridge'
+$startupCatch=$startFunction.FindAll({param($node) $node -is [System.Management.Automation.Language.TryStatementAst]},$true) | Select-Object -Last 1
 $catchText=$startupCatch.CatchClauses[0].Body.Extent.Text
 function Branch-Text($node){$text=$node.Extent.Text;return ($text.Substring(1,$text.Length-2) -replace '(?m)^\s*exit\s*$','')}
 $stopBlock=[scriptblock]::Create((Branch-Text $stopBranch))
@@ -23,6 +24,7 @@ function Stop-Process {param($Id) $script:stopped+= $Id}
 function Test-Path {param($LiteralPath) return $true}
 function Remove-Item {param($LiteralPath) $script:removed=$true}
 function Set-Content {param($LiteralPath,$Encoding,[Parameter(ValueFromPipeline=$true)]$Value) process {$script:saved=$Value}}
+function Move-Item {param($LiteralPath,$Destination,[switch]$Force)}
 function Get-Process {param($Id,$ErrorAction) return $script:fakeProcess}
 function Assert($condition,[string]$message){if(-not $condition){throw $message}}
 function Reset-Fixture {
@@ -65,6 +67,12 @@ $script:failedRoles=@();$script:currentLines=@('0=virtual','1=manually-changed',
 & $stopBlock | Out-Null
 Assert ($script:attempted.Count -eq 1 -and $script:attempted[0] -eq '0') 'Preserve manually selected defaults'
 Assert ($script:removed -and $script:stopped -contains 42) 'Successful cleanup removes rollback state'
+
+Reset-Fixture
+$script:failedRoles=@();$script:inputId='new-config-virtual'
+$script:state | Add-Member NoteProperty inputId 'virtual'
+& $stopBlock | Out-Null
+Assert ($script:attempted.Count -eq 2) 'Changed config must not prevent restoration of the saved bound virtual input'
 
 Reset-Fixture
 $script:queryFails=$true

@@ -45,14 +45,16 @@ public:
     return Capacity() - BytesAvailableProducer();
   }
 
-  // Producer: append up to n bytes. Returns bytes actually written (may be < n if full).
+  // Producer: publish a complete packet or reject it. Partial PCM frames would shift
+  // every later channel when power-of-two capacity is not divisible by frame size.
+  // Returns n on success, 0 if the packet does not fit; queued data is unchanged.
   size_t Write(const void* src, size_t n)
   {
     const uint64_t head = head_.load(std::memory_order_relaxed);
     const uint64_t tail = tail_.load(std::memory_order_acquire);
     const size_t free = Capacity() - static_cast<size_t>(head - tail);
     if (n > free)
-      n = free;
+      return 0;
 
     const size_t off = static_cast<size_t>(head) & mask_;
     const size_t first = std::min(n, Capacity() - off);

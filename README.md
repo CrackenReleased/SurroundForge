@@ -2,7 +2,7 @@
 
 **Forge real PC surround sound through an ordinary USB optical adapter.**
 
-Working release: **v0.1.10**. Gaming surround was confirmed by the user through the USB optical adapter after the reboot speaker-layout repair.
+Working audio runtime: **v0.1.15-local**. Optical output now refills from actual device space on a local timer, preserving complete AC3 bursts and catching up after delayed wakes. This addresses a measured slow USB event cadence that caused recurring jitter despite a healthy heartbeat. Complete PCM packets, bounded recovery and tolerance of health-file locks remain covered by regressions. Frame counters and a sustained live cadence test distinguish audio delivery from worker responsiveness. User confirmed clear, steady sound after this repair; overnight stability still requires observation.
 
 Release tooling: **v0.1.11**, with required publisher signing and a separate unsigned development mode. No public signed release exists yet. See [signing and free distribution options](docs/SIGNING.md).
 

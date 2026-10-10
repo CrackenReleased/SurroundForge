@@ -1,10 +1,10 @@
 // WasapiPassthrough.h
 //
 // The output / master-clock side of the engine. Opens the optical endpoint in EXCLUSIVE,
-// event-driven IEC 61937 (Dolby Digital) mode and, on each render event, pulls PCM from the
+// timer-driven IEC 61937 (Dolby Digital) mode and, when device space permits, pulls PCM from the
 // shared RingBuffer, encodes it to an AC3 / IEC 61937 burst (SpdifEncoder) and writes it to
 // the device. Clock drift between the capture clock and this output clock is absorbed by the
-// ring buffer and corrected SoundPusher-style: every ~64 cycles, excess buffered frames are
+// ring buffer and corrected SoundPusher-style: every ~64 bursts, excess buffered frames are
 // trimmed to bound latency; underruns emit AC3 silence so the receiver stays locked.
 #pragma once
 
@@ -43,10 +43,13 @@ public:
   bool Init(IMMDevice* dev, RingBuffer* ring, const CaptureFormat& capFmt, const Params& p);
   bool Start();
   void Stop();
+  const AudioWorkerHealth& Health() const { return health_; }
 
 private:
+  friend struct AudioWorkerTest;
   bool InitExclusive(int rate);
-  void EncodeIntoBuffer(BYTE* out); // fills one full WASAPI buffer with bursts (+ stuffing)
+  bool EncodeIntoBuffer(BYTE* out, UINT32 frames); // whole bursts only, never carrier stuffing
+  bool RenderOnce();
   void ThreadProc();
 
   ComPtr<IMMDevice>          dev_;
@@ -66,10 +69,11 @@ private:
   UINT32 bufferFrames_ = 0; // exclusive buffer size, in carrier frames
   int    burstsPerCycle_ = 0;
 
-  HANDLE dataEvent_ = nullptr;
+  HANDLE dataEvent_ = nullptr; // waitable refill timer; no USB event callback dependency
   HANDLE stopEvent_ = nullptr;
   std::thread thread_;
   std::atomic_bool running_{false};
+  AudioWorkerHealth health_;
 
   // drift tracking (consumer thread only)
   uint32_t cycle_ = 0;

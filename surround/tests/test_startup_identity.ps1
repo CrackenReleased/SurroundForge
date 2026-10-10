@@ -1,6 +1,7 @@
 # Extract ownership/migration helpers without launching or modifying live audio.
 [CmdletBinding()]
-param([string]$BridgePath=(Join-Path $PSScriptRoot '..\Bridge.ps1'))
+param([string]$BridgePath='')
+if(-not $BridgePath){$BridgePath=Join-Path $PSScriptRoot '..\Bridge.ps1'}
 $ErrorActionPreference='Stop'
 function Assert($value,[string]$message){if(-not $value){throw $message}}
 $bridge=$BridgePath

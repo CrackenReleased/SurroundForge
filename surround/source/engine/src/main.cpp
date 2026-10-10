@@ -105,6 +105,7 @@ static void ParseArgs(int argc, char** argv, Config& c)
     else if (a == "--loopback")   c.loopback = true;
     else if (a == "--mon")        c.monitor = true;
     else if (a == "--activity-log" && i + 1 < argc) c.activityLog = argv[++i];
+    else if (a == "--health-log" && i + 1 < argc) c.healthLog = argv[++i];
     else if (a == "--duration" && i + 1 < argc) c.durationSeconds = (int)std::strtol(argv[++i], nullptr, 10);
     else if (a == "--in")         c.inName = next();
     else if (a == "--in-id")      c.inId = next();
@@ -184,6 +185,7 @@ static int RunToneTest(const Config& cfg)
   std::printf("Six-speaker test: one channel at a time, low level (-30 dBFS).\n");
   while (!g_stop.load() && frame < 20 * 48000)
   {
+    if(out.Health().Failed()) { out.Stop();return 1; }
     // Queue only three AC3 packets ahead; output clock controls production.
     if (ring.SpaceAvailable() < ring.Capacity() - 3 * 1536 * fmt.bytesPerFrame())
     { std::this_thread::sleep_for(std::chrono::milliseconds(1)); continue; }
@@ -209,7 +211,7 @@ static int RunToneTest(const Config& cfg)
   }
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
   out.Stop();
-  return 0;
+  return out.Health().Failed()?1:0;
 }
 
 // Capture-only diagnostic: report how much audio is flowing from the input. Non-intrusive
@@ -233,6 +235,7 @@ static int RunMonitor(const Config& c, IMMDevice* inDev)
   for (int i = 0; i < seconds * 10 && !g_stop.load(); ++i)
   {
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    if(cap.Health().Failed())break;
     const size_t avail = ring.BytesAvailable();
     ring.Read(samples.data(), avail);
     if (f.isFloat && f.bits == 32) {
@@ -261,7 +264,33 @@ static int RunMonitor(const Config& c, IMMDevice* inDev)
   std::printf("Captured ~%llu frames (~%.0f frames/s; endpoint rate %u Hz). %s\n", totalFrames,
               totalFrames / secs, f.sampleRate,
               totalFrames > 0 ? "OK: audio is flowing." : "No data (silent / nothing playing to it).");
-  return 0;
+  return cap.Health().Failed()?1:0;
+}
+
+// Atomic replacement keeps readers from observing truncated JSON. Constant-size snapshot,
+// no recordings or peaks; counters prove worker responsiveness even when the source is mute.
+static bool WriteHealth(const std::string& path,const char* status,
+                        const AudioWorkerHealth& capture,const AudioWorkerHealth& render)
+{
+  if(path.empty())return true;
+  SYSTEMTIME time{};GetSystemTime(&time);
+  char timestamp[40];std::snprintf(timestamp,sizeof(timestamp),"%04u-%02u-%02uT%02u:%02u:%02u.%03uZ",
+    time.wYear,time.wMonth,time.wDay,time.wHour,time.wMinute,time.wSecond,time.wMilliseconds);
+  const char* error=capture.error.load();if(!error)error=render.error.load();
+  const std::string next=path+".next";
+  {
+    std::ofstream file(next,std::ios::trunc);
+    file<<"{\"pid\":"<<GetCurrentProcessId()<<",\"status\":\""<<status
+      <<"\",\"updatedUtc\":\""<<timestamp<<"\",\"capturePolls\":"<<capture.progress.load()
+      <<",\"renderCycles\":"<<render.progress.load()<<",\"droppedPackets\":"<<capture.droppedPackets.load()
+      <<",\"underruns\":"<<render.underruns.load()<<",\"renderTimeouts\":"<<render.timeouts.load()
+      <<",\"capturedFrames\":"<<capture.frames.load()<<",\"submittedFrames\":"<<render.frames.load()
+      <<",\"trimmedFrames\":"<<render.trimmedFrames.load()<<",\"captureDiscontinuities\":"<<capture.discontinuities.load()
+      <<",\"lastError\":\""<<(error?error:"")<<"\"}\n";
+    file.flush();if(!file) { file.close();DeleteFileA(next.c_str());return false; }
+  }
+  if(MoveFileExA(next.c_str(),path.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))return true;
+  DeleteFileA(next.c_str());return false;
 }
 
 int main(int argc, char** argv)
@@ -305,6 +334,7 @@ int main(int argc, char** argv)
     if (std::string(argv[i]) == "--config") cfgPath = argv[i + 1];
   LoadConfigFile(cfgPath, cfg);
   ParseArgs(argc, argv, cfg);
+  if(cfg.safeFrames>8*1536) { std::fputs("--safe must be between 0 and 12288 frames.\n",stderr);return 2; }
 
   SetConsoleCtrlHandler(CtrlHandler, TRUE);
   if (cfg.toneTest) return RunToneTest(cfg);
@@ -374,6 +404,9 @@ int main(int argc, char** argv)
 
   if (!out.Start())     { std::fprintf(stderr, "passthrough start failed\n"); return 1; }
   if (!capture.Start()) { std::fprintf(stderr, "capture start failed\n"); out.Stop(); return 1; }
+  HealthPublicationGuard publication;
+  publication.Observe(WriteHealth(cfg.healthLog,"ready",capture.Health(),out.Health()),AudioNowMs());
+  if(publication.Pending())std::fputs("Engine health publication unavailable; retrying without interrupting audio.\n",stderr);
 
   if (cfg.durationSeconds > 0)
     std::printf("Running for %d s (or Ctrl+C)...\n", cfg.durationSeconds);
@@ -382,6 +415,9 @@ int main(int argc, char** argv)
 
   auto start = std::chrono::steady_clock::now();
   auto nextActivity=start;
+  auto nextHealth=start;
+  uint64_t lastCapture=0,lastRender=0;
+  bool failed=false;
   std::ofstream activity;
   if(!cfg.activityLog.empty()) {
     activity.open(cfg.activityLog,std::ios::app);
@@ -390,6 +426,21 @@ int main(int argc, char** argv)
   while (!g_stop.load())
   {
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    if(capture.Health().Failed() || out.Health().Failed()) { failed=true;break; }
+    if(std::chrono::steady_clock::now()>=nextHealth) {
+      const auto capProgress=capture.Health().progress.load(),renderProgress=out.Health().progress.load();
+      // A responsive main thread cannot certify a stalled audio worker.
+      if(capProgress>lastCapture && renderProgress>lastRender) {
+        const bool wasPending=publication.Pending();
+        if(!publication.Observe(WriteHealth(cfg.healthLog,"ready",capture.Health(),out.Health()),AudioNowMs())) {
+          std::fputs("Cannot update engine health for ten seconds; stopping.\n",stderr);failed=true;break;
+        }
+        if(publication.Pending() && !wasPending)std::fputs("Engine health publication unavailable; retrying without interrupting audio.\n",stderr);
+        if(!publication.Pending() && wasPending)std::fputs("Engine health publication recovered.\n",stderr);
+        lastCapture=capProgress;lastRender=renderProgress;
+      }
+      nextHealth=std::chrono::steady_clock::now()+std::chrono::seconds(1);
+    }
     if(activity && std::chrono::steady_clock::now()>=nextActivity) {
       // Keep at most two 2 MiB files. This runs outside the real-time audio thread.
       if(activity.tellp()>=2*1024*1024) {
@@ -417,7 +468,14 @@ int main(int argc, char** argv)
   }
 
   std::printf("\nStopping...\n");
+  if(failed) {
+    const auto& health=capture.Health().Failed()?capture.Health():out.Health();
+    const char* reason=health.error.load();
+    std::fprintf(stderr,"Audio worker failed: %s (%s)\n",reason?reason:"health_log_write_failed",HrStr(health.errorCode.load()).c_str());
+    WriteHealth(cfg.healthLog,"failed",capture.Health(),out.Health());
+  }
   capture.Stop();
   out.Stop();
-  return 0;
+  if(!failed)WriteHealth(cfg.healthLog,"stopped",capture.Health(),out.Health());
+  return failed?1:0;
 }

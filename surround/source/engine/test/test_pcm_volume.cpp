@@ -27,3 +27,19 @@ TEST_CASE("Volume preserves all six interleaved channels and the source packet")
   CHECK(source[5] == -.6f);
   CHECK(source[11] == .2f);
 }
+
+TEST_CASE("Invalid PCM samples cannot poison following channels or packets")
+{
+  const std::array<float, 6> source{.25f, std::numeric_limits<float>::quiet_NaN(),
+      -.5f, std::numeric_limits<float>::infinity(),
+      -std::numeric_limits<float>::infinity(), .75f};
+  std::array<float, 6> output{};
+  ApplyPcmVolume(output.data(), source.data(), sizeof(source), .5f);
+  const std::array<float, 6> expected{.125f, 0, -.25f, 0, 0, .375f};
+  CHECK(output == expected);
+  for (float gain : {std::numeric_limits<float>::quiet_NaN(),
+                     std::numeric_limits<float>::infinity(), -1.f}) {
+    ApplyPcmVolume(output.data(), source.data(), sizeof(source), gain);
+    for (float sample : output) CHECK(sample == 0);
+  }
+}

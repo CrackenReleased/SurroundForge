@@ -56,7 +56,7 @@ public:
   // Open the encoder. Returns false (and logs to stderr) on failure.
   bool Init(const Params& p);
   void Close();
-  bool IsOpen() const { return codecCtx_ != nullptr; }
+  bool IsOpen() const { return initialized_; }
 
   // Input sample-frames consumed per EncodePacket() call (AC3 == 1536).
   int FramesPerPacket() const { return framesPerPacket_; }
@@ -74,6 +74,7 @@ public:
   int EncodePacket(const uint8_t* in, uint8_t* outBuf, int outSize);
 
 private:
+  friend struct SpdifEncoderTestAccess; // Regression access to the real AVIO callback.
   // FFmpeg >= 6.1 AVIO write callback signature uses const uint8_t*.
   static int WritePacketThunk(void* opaque, const uint8_t* buf, int buf_size);
   int OnWritePacket(const uint8_t* buf, int buf_size);
@@ -106,4 +107,5 @@ private:
   uint8_t* writeDst_ = nullptr;
   int      writeCap_ = 0;
   int      writeLen_ = 0;
+  bool initialized_ = false;
 };

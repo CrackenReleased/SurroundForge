@@ -2,6 +2,16 @@
 #include "doctest.h"
 #include "SpdifEncoder.h"
 
+struct SpdifEncoderTestAccess {
+  static int Write(SpdifEncoder& encoder, uint8_t* destination, int capacity,
+                   const uint8_t* source, int count) {
+    encoder.writeDst_ = destination;
+    encoder.writeCap_ = capacity;
+    encoder.writeLen_ = 0;
+    return encoder.OnWritePacket(source, count);
+  }
+};
+
 extern "C" {
 #include <libavutil/channel_layout.h>
 #include <libavutil/samplefmt.h>
@@ -111,6 +121,47 @@ TEST_CASE("init: AC3-invalid sample rate fails cleanly")
 {
   SpdifEncoder enc;
   CHECK_FALSE(InitFor(enc, 6, AV_SAMPLE_FMT_FLT, 96000)); // AC3 supports 48/44.1/32k only
+  CHECK_FALSE(enc.IsOpen());
+}
+
+TEST_CASE("muxer overflow rejects the complete write without reporting false success")
+{
+  SpdifEncoder encoder;
+  const uint8_t source[8] = {1,2,3,4,5,6,7,8};
+  uint8_t destination[6] = {9,9,9,9,9,9};
+  CHECK(SpdifEncoderTestAccess::Write(encoder, destination, 4, source, 8) < 0);
+  for (uint8_t value : destination) CHECK(value == 9);
+  CHECK(SpdifEncoderTestAccess::Write(encoder, destination, 4, source, 4) == 4);
+  CHECK(destination[0] == 1);
+  CHECK(destination[3] == 4);
+  CHECK(destination[4] == 9);
+}
+
+TEST_CASE("encoder rejects unsafe parameter combinations and can reopen after failure")
+{
+  SpdifEncoder encoder;
+  SpdifEncoder::Params p;
+  av_channel_layout_default(&p.inLayout, 6);
+  p.inSampleFmt = AV_SAMPLE_FMT_FLTP; // EncodePacket accepts one interleaved plane.
+  CHECK_FALSE(encoder.Init(p));
+  CHECK_FALSE(encoder.IsOpen());
+  p.inSampleFmt = AV_SAMPLE_FMT_FLT;
+  p.bitRate = 640001;
+  CHECK_FALSE(encoder.Init(p));
+  p.bitRate = 0;
+  CHECK_FALSE(encoder.Init(p));
+  p.bitRate = 448000;
+  REQUIRE(encoder.Init(p));
+  CHECK(encoder.IsOpen());
+  std::vector<float> input(1536 * 6);
+  std::vector<uint8_t> output(6144);
+  CHECK(encoder.EncodePacket(nullptr, output.data(), 6144) < 0);
+  CHECK(encoder.EncodePacket(reinterpret_cast<uint8_t*>(input.data()), nullptr, 6144) < 0);
+  CHECK(encoder.EncodePacket(reinterpret_cast<uint8_t*>(input.data()), output.data(), 6143) < 0);
+  CHECK(encoder.EncodePacket(reinterpret_cast<uint8_t*>(input.data()), output.data(), 6144) == 6144);
+  av_channel_layout_uninit(&p.inLayout);
+  encoder.Close();
+  CHECK_FALSE(encoder.IsOpen());
 }
 
 // (The surround upmix is covered by a meaningful behavioral test in test_upmix.cpp:

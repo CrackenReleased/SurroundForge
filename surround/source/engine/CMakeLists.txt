@@ -103,13 +103,17 @@ add_executable(unit_tests
   test/test_upmix.cpp
   test/test_ac3_formats.cpp
   test/test_pcm_volume.cpp
+  test/test_audio_workers.cpp
+  src/WasapiCapture.cpp
+  src/WasapiPassthrough.cpp
+  src/ComUtil.cpp
   src/Guids.cpp
 )
 target_include_directories(unit_tests PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/doctest"
   src
 )
-target_link_libraries(unit_tests PRIVATE ac3core ffmpeg)
+target_link_libraries(unit_tests PRIVATE ac3core ffmpeg ole32 avrt)
 stage_ffmpeg_dlls(unit_tests)
 add_test(NAME unit_tests COMMAND unit_tests)
 

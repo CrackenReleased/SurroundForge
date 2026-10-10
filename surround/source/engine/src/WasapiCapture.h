@@ -7,6 +7,7 @@
 
 #include "ComUtil.h"
 #include "RingBuffer.h"
+#include "AudioWorkerHealth.h"
 
 #include <audioclient.h>
 #include <mmdeviceapi.h>
@@ -43,6 +44,7 @@ public:
   void SetRing(RingBuffer* ring) { ring_ = ring; }
   bool Start();
   void Stop();
+  const AudioWorkerHealth& Health() const { return health_; }
 
   const CaptureFormat& Format() const { return fmt_; }
   // Raw source peaks, before Windows gain/mute, for local diagnostics only.
@@ -53,6 +55,7 @@ public:
   }
 
 private:
+  friend struct AudioWorkerTest;
   void ThreadProc();
 
   RingBuffer*               ring_ = nullptr;
@@ -66,5 +69,6 @@ private:
   HANDLE                    stopEvent_ = nullptr;
   std::thread               thread_;
   std::atomic_bool          running_{false};
+  AudioWorkerHealth health_;
   std::array<std::atomic<float>, 6> signalPeaks_{};
 };

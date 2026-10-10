@@ -31,6 +31,14 @@ bool SpdifEncoder::Init(const Params& p)
 {
   Close();
 
+  if ((p.sampleRate != 48000 && p.sampleRate != 44100 && p.sampleRate != 32000) ||
+      p.bitRate <= 0 || p.bitRate > 640000 || !av_channel_layout_check(&p.inLayout) ||
+      p.inLayout.nb_channels > 64 || av_get_bytes_per_sample(p.inSampleFmt) <= 0 ||
+      av_sample_fmt_is_planar(p.inSampleFmt)) {
+    std::fputs("[SpdifEncoder] Invalid rate, bitrate, channel layout or interleaved sample format.\n", stderr);
+    return false;
+  }
+
   av_channel_layout_copy(&inLayout_, &p.inLayout);
   inSampleFmt_ = p.inSampleFmt;
   sampleRate_ = p.sampleRate;
@@ -124,11 +132,13 @@ bool SpdifEncoder::Init(const Params& p)
   rc = avformat_write_header(muxer_, nullptr);
   if (rc < 0) { LogAv("avformat_write_header(spdif)", rc); return false; }
 
+  initialized_ = true;
   return true;
 }
 
 void SpdifEncoder::Close()
 {
+  initialized_ = false;
   if (muxer_)
   {
     if (muxer_->pb) // a header was written iff pb exists
@@ -153,6 +163,8 @@ void SpdifEncoder::Close()
   av_channel_layout_uninit(&inLayout_);
   framesPerPacket_ = 0;
   nextPts_ = 0;
+  writeDst_ = nullptr;
+  writeCap_ = writeLen_ = 0;
 }
 
 bool SpdifEncoder::BuildFilterGraph()
@@ -255,7 +267,7 @@ bool SpdifEncoder::FeedFilter(const uint8_t* in)
 
 int SpdifEncoder::EncodePacket(const uint8_t* in, uint8_t* outBuf, int outSize)
 {
-  if (!codecCtx_)
+  if (!initialized_ || !in || !outBuf)
     return -1;
   if (outSize < kMaxBytesPerPacket)
     return -1;
@@ -282,7 +294,10 @@ int SpdifEncoder::EncodePacket(const uint8_t* in, uint8_t* outBuf, int outSize)
     // Convert/downmix the interleaved input into the planar-float encoder frame.
     const uint8_t* inPlanes[1] = { in };
     int got = swr_convert(swr_, frame_->data, frame_->nb_samples, inPlanes, framesPerPacket_);
-    if (got < 0) { LogAv("swr_convert", got); return -1; }
+    if (got != frame_->nb_samples) {
+      std::fputs("[SpdifEncoder] swr_convert did not produce a complete PCM packet.\n", stderr);
+      return -1;
+    }
   }
 
   frame_->pts = nextPts_;
@@ -307,10 +322,10 @@ int SpdifEncoder::EncodeFrameToBurst(uint8_t* outBuf, int outSize)
 
   rc = av_write_frame(muxer_, pkt_);
   av_packet_unref(pkt_);
-  if (rc < 0) { LogAv("av_write_frame(spdif)", rc); return -1; }
-  avio_flush(muxer_->pb); // force the muxer to emit the full burst through OnWritePacket
+  if (rc >= 0) avio_flush(muxer_->pb); // also check errors reported by the AVIO callback
 
-  int n = writeLen_;
+  const int n = (rc < 0 || muxer_->pb->error < 0 || writeLen_ != kMaxBytesPerPacket)
+      ? -1 : writeLen_;
   writeDst_ = nullptr;
   writeCap_ = 0;
   writeLen_ = 0;
@@ -324,13 +339,13 @@ int SpdifEncoder::WritePacketThunk(void* opaque, const uint8_t* buf, int buf_siz
 
 int SpdifEncoder::OnWritePacket(const uint8_t* buf, int buf_size)
 {
-  int n = buf_size;
-  if (writeLen_ + n > writeCap_)
-    n = writeCap_ - writeLen_;
-  if (n > 0)
+  if (buf_size < 0 || writeLen_ < 0 || writeCap_ < writeLen_ ||
+      buf_size > writeCap_ - writeLen_ || (buf_size && (!writeDst_ || !buf)))
+    return AVERROR(ENOSPC);
+  if (buf_size > 0)
   {
-    std::memcpy(writeDst_ + writeLen_, buf, static_cast<size_t>(n));
-    writeLen_ += n;
+    std::memcpy(writeDst_ + writeLen_, buf, static_cast<size_t>(buf_size));
+    writeLen_ += buf_size;
   }
-  return buf_size; // report full consumption to the muxer even if we clamped
+  return buf_size;
 }

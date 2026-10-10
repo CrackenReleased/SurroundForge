@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Build & Verify SurroundForge Suite (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache FFmpeg dev libs
+        id: ffmpeg-cache
+        uses: actions/cache@v4
+        with:
+          path: surround/source/third_party/ffmpeg
+          key: ffmpeg-${{ runner.os }}-${{ hashFiles('surround/source/scripts/fetch-ffmpeg.ps1') }}
+
+      - name: Fetch FFmpeg
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: ./surround/source/scripts/fetch-ffmpeg.ps1
+
+      - name: Configure CMake (VS 2022 x64)
+        run: cmake -S surround/source/engine -B surround/source/engine/build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build Engine & Unit Tests
+        run: cmake --build surround/source/engine/build --config Release
+
+      - name: Run Comprehensive Test Suite
+        shell: pwsh
+        run: ./surround/tests/Invoke-TestSuite.ps1 -Suite Offline

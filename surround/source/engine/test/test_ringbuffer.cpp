@@ -66,13 +66,37 @@ TEST_CASE("data wraps correctly across the buffer boundary")
   for (int i = 0; i < 8; ++i) CHECK(out[i] == 100 + i);
 }
 
-TEST_CASE("write clamps at capacity (no overrun)")
+TEST_CASE("overflow rejects a whole packet without changing queued data")
 {
   RingBuffer rb(16); // capacity 16
   std::vector<uint8_t> a(20, 0xAB);
-  CHECK(rb.Write(a.data(), 20) == 16);
-  CHECK(rb.BytesAvailable() == 16);
-  CHECK(rb.SpaceAvailable() == 0);
+  CHECK(rb.Write(a.data(), a.size()) == 0);
+  CHECK(rb.BytesAvailable() == 0);
+  CHECK(rb.SpaceAvailable() == rb.Capacity());
+  CHECK(rb.Write(a.data(), 12) == 12);
+  CHECK(rb.Write(a.data(), 8) == 0);
+  CHECK(rb.BytesAvailable() == 12);
+}
+
+TEST_CASE("six-channel PCM remains aligned after repeated overflow and recovery")
+{
+  // Real bridge sizing rounds 8*1536*24 up to 524288, leaving 8 spare bytes.
+  // The old byte clamp published those 8 bytes as a partial six-float frame.
+  constexpr size_t channels = 6, frames = 480;
+  RingBuffer rb(8 * 1536 * channels * sizeof(float));
+  std::vector<float> packet(frames * channels), decoded(frames * channels);
+  for (size_t i = 0; i < packet.size(); ++i) packet[i] = float(i % channels + 1);
+  const size_t bytes = packet.size() * sizeof(float);
+  for (int recovery = 0; recovery < 3; ++recovery) {
+    while (rb.SpaceAvailable() >= bytes) REQUIRE(rb.Write(packet.data(), bytes) == bytes);
+    CHECK(rb.Write(packet.data(), bytes) == 0);
+    CHECK(rb.BytesAvailable() % (channels * sizeof(float)) == 0);
+    while (rb.BytesAvailable() >= bytes) {
+      REQUIRE(rb.Read(decoded.data(), bytes) == bytes);
+      CHECK(decoded == packet);
+    }
+    CHECK(rb.BytesAvailable() == 0);
+  }
 }
 
 TEST_CASE("read/discard clamp at available")

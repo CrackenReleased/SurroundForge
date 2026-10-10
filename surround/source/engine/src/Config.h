@@ -15,6 +15,7 @@ struct Config
   int  monitorSeconds = 5;
   int  durationSeconds = 0; // 0 = run until Ctrl+C; otherwise auto-stop after N seconds
   std::string activityLog; // local peak values only; bounded rotating CSV, no recordings
+  std::string healthLog; // one overwritten worker responsiveness JSON for the supervisor
 
   // Capture (input) endpoint — the virtual cable's recording side.
   std::wstring inName = L"CABLE Output"; // friendly-name substring (VB-CABLE default)
