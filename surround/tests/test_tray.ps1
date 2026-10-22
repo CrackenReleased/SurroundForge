@@ -93,6 +93,9 @@ $bridgeSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\Bridge.ps1
 Assert ($bridgeSource -match 'IconLocation=Join-Path \$env:LOCALAPPDATA ''SurroundForge\\surroundforge\.ico,0''') 'Startup shortcut must link to canonical surroundforge.ico'
 Assert ($traySource -match 'Stop audio & close') 'Tray controller must provide a Stop audio & close action to stop the engine and exit cleanly'
 Assert ($traySource -match 'EnsureDefaultDesktop' -and $traySource -match 'SurroundForge_Tray_Launch' -and $traySource -match 'Ensure-SurroundForgeHost') 'Tray controller must relaunch via SurroundForge.exe onto Default desktop with Sonic Anvil Win32 icon'
+Assert ((Get-TrayLaunchMode 'Default' 'powershell') -eq 'Direct') 'A normal desktop shortcut must launch the GUI host directly rather than through Task Scheduler'
+Assert ((Get-TrayLaunchMode 'Default' 'SurroundForge') -eq 'InProcess') 'The GUI host must not relaunch itself'
+Assert ((Get-TrayLaunchMode 'isolated-agent-desktop' 'powershell') -eq 'Scheduled') 'An isolated desktop must still reach the visible desktop'
 $catalog = @(Get-SpeakerCatalog)
 Assert ($catalog.Count -eq 8) 'All 8 surround speakers (FL, FC, FR, SL, LFE, SR, BL, BR) must be viewable in catalog'
 Assert ((($catalog | Select-Object -ExpandProperty Code) -join ',') -eq 'FL,FC,FR,SL,LFE,SR,BL,BR') 'Speaker catalog must expose exact 8 speaker codes'

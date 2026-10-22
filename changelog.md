@@ -1,3 +1,9 @@
+## v0.1.18-local — 2026-10-21 — Restore desktop and sign-in controller launch
+
+- Launch the controller host directly when `Tray.ps1` already runs on the visible Windows desktop. The previous path sent every launch through a scheduled task, which completed without leaving the controller window running on this PC.
+- Keep the scheduled desktop handoff for isolated agent desktops. Audio routing and the running encoder are unchanged.
+- Add a regression test for direct desktop launch selection and verify both the desktop and sign-in shortcuts open the controller window.
+
 ## v0.1.17-local — 2026-10-21 — Dynamic 4-color status emblem, desktop restart shortcut, and MSI installer shortcut delivery
 
 - **Dynamic 4-Color Status Palette**: Configured the Sonic Anvil emblem, GUI window icon, and system tray icon in `surround/Tray.ps1` to reactively reflect engine health state: Teal (`#00E4C4`) for Running/Good, Orange (`#FAA00A`) for Issues (Recovering/Starting/Needs attention), Gray (`#8291A5`) for Stopped (manual pause), and Red (`#F8414B`) for Off (offline/snapshot error).

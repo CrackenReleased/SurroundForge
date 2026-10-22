@@ -1,4 +1,4 @@
-<# SurroundForge controls v0.1.16. Closing this UI never stops audio. #>
+<# SurroundForge controls v0.1.18-local. Closing this UI never stops audio. #>
 [CmdletBinding()]
 param([switch]$Show,[switch]$NoUi)
 $ErrorActionPreference='Stop'
@@ -439,13 +439,24 @@ public static class SurroundForgeHost {
   return $exePath
 }
 
+function Get-TrayLaunchMode([string]$Desktop,[string]$ProcessName) {
+  if($Desktop -ne 'Default'){return 'Scheduled'}
+  if($ProcessName -ne 'SurroundForge'){return 'Direct'}
+  return 'InProcess'
+}
+
 function EnsureDefaultDesktop {
   Register-TrayNativeTypes
   $desk=[SurroundForgeTrayIcon]::GetCurrentDesktopName()
   $procName=[Diagnostics.Process]::GetCurrentProcess().ProcessName
-  if($desk -ne 'Default' -or $procName -ne 'SurroundForge') {
+  $mode=Get-TrayLaunchMode $desk $procName
+  if($mode -ne 'InProcess') {
     $exePath=Ensure-SurroundForgeHost
     $argStr=if($Show){' -Show'}else{''}
+    if($mode -eq 'Direct') {
+      Start-Process -FilePath $exePath -ArgumentList $argStr -WorkingDirectory (Split-Path $exePath) | Out-Null
+      return $true
+    }
     $tr='"'+$exePath+'"'+$argStr
     $prev=$ErrorActionPreference;$ErrorActionPreference='Continue'
     try {
@@ -535,7 +546,7 @@ function Show-TrayUi {
 
   $note=Add-TrayLabel $form 'Minimize or X to keep running in the tray, or click "Stop audio & close" to shut down.' 26 550 508 34 9
   $note.UseMnemonic=$false
-  $version=Add-TrayLabel $form 'Controls v0.1.16  |  Audio engine v0.1.15  |  Sonic Anvil Harmonic Calibration' 26 590 508 20 8
+  $version=Add-TrayLabel $form 'Controls v0.1.18  |  Audio engine v0.1.15  |  Sonic Anvil Harmonic Calibration' 26 590 508 20 8
   $version.ForeColor=[Drawing.Color]::DimGray
   $icon=New-Object Windows.Forms.NotifyIcon;$icon.Icon=$script:TrayIcons.Gray;$icon.Text='SurroundForge - Checking';$icon.Visible=$true
   $menu=New-Object Windows.Forms.ContextMenuStrip
