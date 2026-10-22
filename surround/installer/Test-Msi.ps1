@@ -36,12 +36,12 @@ function Startup-Fingerprint {
   return ((Get-ChildItem -LiteralPath ([Environment]::GetFolderPath('Startup')) -Filter '*.lnk' -File |
     Sort-Object FullName | ForEach-Object {$_.FullName+' '+(Get-FileHash -LiteralPath $_.FullName).Hash}) -join "`n")
 }
-foreach($identity in @(@('SetupShortcut','SurroundForge Setup'),@('StartShortcut','Start SurroundForge'),@('StopShortcut','Stop SurroundForge'))){
+foreach($identity in @(@('SetupShortcut','SurroundForge Setup'),@('StartShortcut','Start SurroundForge'),@('StopShortcut','Stop SurroundForge'),@('DesktopStartShortcut','Start SoundForge'))){
   Assert (((Query ("SELECT Name FROM Shortcut WHERE Shortcut='"+$identity[0]+"'")) -split '\|')[-1] -eq $identity[1]) 'Installed shortcut identity mismatch'
 }
 Assert (-not (Query "SELECT Value FROM Property WHERE Property='ALLUSERS'")) 'Package must be per-user'
 $names=Query 'SELECT FileName FROM File'
-foreach($name in 'engine.exe','bridge_control.exe','Setup.ps1','Bridge.ps1','Uninstall.ps1','VBCABLE_Setup_x64.exe','C-Media.zip','vcruntime140.dll','msvcp140.dll') {
+foreach($name in 'engine.exe','bridge_control.exe','Setup.ps1','Bridge.ps1','Tray.ps1','Uninstall.ps1','VBCABLE_Setup_x64.exe','C-Media.zip','vcruntime140.dll','msvcp140.dll') {
   Assert (@($names | Where-Object {($_ -split '\|')[-1] -eq $name}).Count -eq 1) "Missing/duplicate payload file $name"
 }
 foreach($name in 'bridge.conf','bridge-state.json','bridge.log'){Assert (-not ($names | Where-Object {($_ -split '\|')[-1] -eq $name})) "Laptop configuration/state must not ship: $name"}
@@ -49,7 +49,7 @@ Assert ((Query "SELECT Target FROM CustomAction WHERE Action='LaunchSetup'") -ma
 Msi-Run @('/a',('"'+$msi+'"'),('TARGETDIR="'+$extract+'"')) 'extract.log'
 $installedRoot=(Get-ChildItem -LiteralPath $extract -Filter 'Bridge.ps1' -Recurse -File | Select-Object -First 1).Directory.FullName
 Assert $installedRoot 'Bridge missing after extraction'
-foreach($name in 'Bridge.ps1','Setup.ps1') {
+foreach($name in 'Bridge.ps1','Setup.ps1','Tray.ps1') {
   if($policy){
     Test-ReleaseSignature -Path (Join-Path $installedRoot $name) -Policy $policy | Out-Null
     $packaged=[IO.File]::ReadAllText((Join-Path $installedRoot $name)) -replace '(?ms)^# SIG # Begin signature block.*\z',''
@@ -65,7 +65,7 @@ if($policy){
 }
 # Release 0.1.11 changes packaging/signing, not the verified 0.1.10 audio engine.
 $engineVersion=& (Join-Path $installedRoot 'Runtime\engine.exe') --version
-Assert ($LASTEXITCODE -eq 0 -and $engineVersion -eq 'SurroundForge 0.1.10-local') 'Packaged engine/runtime version mismatch or dependency load failure'
+Assert ($LASTEXITCODE -eq 0 -and ($engineVersion -in 'SurroundForge 0.1.10-local','SurroundForge 0.1.15-local')) 'Packaged engine/runtime version mismatch or dependency load failure'
 $devices=(& (Join-Path $installedRoot 'Runtime\bridge_control.exe') --devices-json) | ConvertFrom-Json
 Assert ($LASTEXITCODE -eq 0 -and $devices.Count -gt 0) 'Packaged controller/runtime dependency load failed'
 Get-ChildItem -LiteralPath (Join-Path $root 'vbcable') -File | ForEach-Object {

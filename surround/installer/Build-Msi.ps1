@@ -21,7 +21,7 @@ function Copy-Payload($source,$relative) {
   New-Item -ItemType Directory -Path (Split-Path $target -Parent) -Force | Out-Null
   Copy-Item -LiteralPath $source -Destination $target -Force
 }
-foreach($name in 'Bridge.ps1','Setup.ps1'){Copy-Payload (Join-Path $root $name) $name}
+foreach($name in 'Bridge.ps1','Setup.ps1','Tray.ps1'){Copy-Payload (Join-Path $root $name) $name}
 Copy-Payload (Join-Path $PSScriptRoot 'Uninstall.ps1') 'Uninstall.ps1'
 Copy-Payload (Join-Path $PSScriptRoot 'Read Me.txt') 'Read Me.txt'
 Copy-Payload (Join-Path $PSScriptRoot 'Third Party Notices.txt') 'Third Party Notices.txt'
@@ -106,7 +106,7 @@ $source=@'
 <Property Id="INSTALLFOLDER"><RegistrySearch Id="SavedInstallFolder" Root="HKCU" Key="Software\CrackenReleased\SurroundForge" Name="InstallFolder" Type="raw" Win64="yes" /></Property>
 <Condition Message="SurroundForge requires 64-bit Windows 10 or 11.">VersionNT64 AND WINDOWSREALBUILD &gt;= 10240</Condition>
 <Property Id="MSIRESTARTMANAGERCONTROL" Value="Disable" />
-<Directory Id="TARGETDIR" Name="SourceDir"><Directory Id="LocalAppDataFolder"><Directory Id="INSTALLFOLDER" Name="SurroundForge" /></Directory><Directory Id="ProgramMenuFolder"><Directory Id="AppMenu" Name="SurroundForge" /></Directory></Directory>
+<Directory Id="TARGETDIR" Name="SourceDir"><Directory Id="LocalAppDataFolder"><Directory Id="INSTALLFOLDER" Name="SurroundForge" /></Directory><Directory Id="ProgramMenuFolder"><Directory Id="AppMenu" Name="SurroundForge" /></Directory><Directory Id="DesktopFolder" Name="Desktop" /></Directory>
 DIRECTORIES
 COMPONENTS
 <DirectoryRef Id="AppMenu"><Component Id="MenuShortcuts" Guid="*" Win64="yes">
@@ -114,7 +114,10 @@ COMPONENTS
 <Shortcut Id="StartShortcut" Name="Start SurroundForge" Target="[SystemFolder]WindowsPowerShell\v1.0\powershell.exe" Arguments="-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]Bridge.ps1&quot; -Action Start" WorkingDirectory="INSTALLFOLDER" />
 <Shortcut Id="StopShortcut" Name="Stop SurroundForge" Target="[SystemFolder]WindowsPowerShell\v1.0\powershell.exe" Arguments="-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]Bridge.ps1&quot; -Action Stop" WorkingDirectory="INSTALLFOLDER" />
 <RemoveFolder Id="RemoveAppMenu" On="uninstall" />REMOVEFOLDERS<RegistryValue Root="HKCU" Key="Software\CrackenReleased\SurroundForge" Name="Installed" Type="integer" Value="1" KeyPath="yes" /><RegistryValue Root="HKCU" Key="Software\CrackenReleased\SurroundForge" Name="InstallFolder" Type="string" Value="[INSTALLFOLDER]" /></Component></DirectoryRef>
-<Feature Id="Complete" Title="SurroundForge" Level="1">FEATURES<ComponentRef Id="MenuShortcuts" /></Feature>
+<DirectoryRef Id="DesktopFolder"><Component Id="DesktopShortcuts" Guid="*" Win64="yes">
+<Shortcut Id="DesktopStartShortcut" Name="Start SoundForge" Target="[SystemFolder]WindowsPowerShell\v1.0\powershell.exe" Arguments="-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]Bridge.ps1&quot; -Action Start" WorkingDirectory="INSTALLFOLDER" />
+<RegistryValue Root="HKCU" Key="Software\CrackenReleased\SurroundForge" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" /></Component></DirectoryRef>
+<Feature Id="Complete" Title="SurroundForge" Level="1">FEATURES<ComponentRef Id="MenuShortcuts" /><ComponentRef Id="DesktopShortcuts" /></Feature>
 <CustomAction Id="LaunchSetup" Directory="INSTALLFOLDER" ExeCommand="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]Setup.ps1&quot;" Execute="immediate" Return="asyncNoWait" Impersonate="yes" />
 <CustomAction Id="CleanupBridge" Directory="INSTALLFOLDER" ExeCommand="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]Uninstall.ps1&quot;" Execute="immediate" Return="check" Impersonate="yes" />
 <InstallExecuteSequence><Custom Action="CleanupBridge" Before="RemoveFiles">Installed AND REMOVE~="ALL"</Custom></InstallExecuteSequence>

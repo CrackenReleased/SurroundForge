@@ -482,6 +482,7 @@ try {
     $shortcut.TargetPath=Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $shortcut.Arguments='-NoProfile -ExecutionPolicy Bypass -File "'+$PSCommandPath+'" -Action Start'
     $shortcut.WorkingDirectory=$root;$shortcut.WindowStyle=7
+    $shortcut.IconLocation=Join-Path $env:LOCALAPPDATA 'SurroundForge\surroundforge.ico,0'
     $shortcut.Description='Start the tested SurroundForge encoder after sign-in'
     $shortcut.Save();Remove-OwnedStartupShortcuts $shell $startup
     Write-Output "Startup enabled: $startup";exit

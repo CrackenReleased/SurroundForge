@@ -1,3 +1,10 @@
+## v0.1.17-local — 2026-10-21 — Dynamic 4-color status emblem, desktop restart shortcut, and MSI installer shortcut delivery
+
+- **Dynamic 4-Color Status Palette**: Configured the Sonic Anvil emblem, GUI window icon, and system tray icon in `surround/Tray.ps1` to reactively reflect engine health state: Teal (`#00E4C4`) for Running/Good, Orange (`#FAA00A`) for Issues (Recovering/Starting/Needs attention), Gray (`#8291A5`) for Stopped (manual pause), and Red (`#F8414B`) for Off (offline/snapshot error).
+- **Desktop Restart Shortcut**: Added `Ensure-SetupDesktopShortcut` to create/maintain `Start SoundForge.lnk` on the user's Desktop (`powershell.exe -NoProfile -ExecutionPolicy Bypass -File "...\Bridge.ps1" -Action Start`, minimized style 7, canonical `surroundforge.ico`). Integrated into `Save-SetupConfiguration` in `Setup.ps1`.
+- **Installer Integration**: Added `DesktopFolder` directory reference and `DesktopStartShortcut` component to the WiX MSI manifest in `surround/installer/Build-Msi.ps1` and included `Tray.ps1` in the MSI payload; verified via `surround/installer/Test-Msi.ps1`.
+- **Offline Suite & Regression Coverage**: Added desktop shortcut assertions to `surround/tests/test_setup.ps1`, 4-color palette assertions to `surround/tests/test_tray.ps1`, and adapted `surround/tests/test_bridge_control.py` for headless/offline optical checks (16/16 test suites passing in `Run-Tests.ps1 -Suite Offline`).
+
 ## v0.1.16-local — 2026-10-10 — migration revision 1
 
 - Establish `E:\SurroundForge` as the canonical checkout and GitHub source repository; update root/source/driver build, troubleshooting, signing and attribution docs. AI Hub project files are documentation mirrors.

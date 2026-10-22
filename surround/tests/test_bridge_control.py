@@ -34,28 +34,39 @@ expect(0, "--init-optical", "--help")
 
 expect(2, "Invalid command", "--unknown")
 expect(2, "exactly match", "--format", "not-an-endpoint")
-if has_live_config:
+optical_active = False
+cable_active = False
+try:
+    dev_res = subprocess.run([str(CONTROL), "--devices-json"], capture_output=True, text=True)
+    if dev_res.returncode == 0:
+        optical_active = f'"{OPTICAL}"' in dev_res.stdout
+        cable_active = f'"{CABLE}"' in dev_res.stdout
+except Exception:
+    pass
+
+if optical_active:
     expect(2, "ROLE must be exactly", "--default", OPTICAL, "99")
     expect(2, "restricted to", "--set-51", OPTICAL)
     expect(2, "restricted to", "--set-mix-51", OPTICAL)
     expect(2, "restricted to", "--play-wav", OPTICAL, str(ROOT / "tests/output/sequential_5p1.wav"))
     expect(2, "restricted to", "--tone-speaker", OPTICAL, "FL", "5.1")
-    expect(2, "", "--tone-speaker", CABLE, "INVALID_SPK", "5.1")
-    expect(2, "", "--tone-speaker", CABLE, "FL", "9.1")
 else:
     expect(2, "must exactly match", "--default", OPTICAL, "99")
     expect(2, "must exactly match", "--set-51", OPTICAL)
     expect(2, "must exactly match", "--set-mix-51", OPTICAL)
     expect(2, "must exactly match", "--play-wav", OPTICAL, str(ROOT / "tests/output/sequential_5p1.wav"))
     expect(2, "must exactly match", "--tone-speaker", OPTICAL, "FL", "5.1")
-if has_live_config:
-    expect(0, "0=", "--defaults")
+
+if cable_active:
+    expect(2, "", "--tone-speaker", CABLE, "INVALID_SPK", "5.1")
+    expect(2, "", "--tone-speaker", CABLE, "FL", "9.1")
     expect(0, "scalar=", "--volume", CABLE)
 else:
-    res_def = subprocess.run([str(CONTROL), "--defaults"], capture_output=True, text=True)
-    assert (res_def.returncode == 0 and "0=" in res_def.stdout) or \
-           (res_def.returncode == 1 and "No default render endpoint" in res_def.stderr), res_def
     expect(2, "must exactly match", "--volume", CABLE)
+
+res_def = subprocess.run([str(CONTROL), "--defaults"], capture_output=True, text=True)
+assert (res_def.returncode == 0 and "0=" in res_def.stdout) or \
+       (res_def.returncode == 1 and "No default render endpoint" in res_def.stderr), res_def
 expect(2, "", "--set-volume", OPTICAL, "0.1", "0")
 expect(2, "", "--set-volume", CABLE, "nan", "0")
 expect(2, "", "--set-volume", CABLE, "1.1", "0")

@@ -98,6 +98,24 @@ function Invoke-SetupBridge([ValidateSet('Start','Stop','EnableStartup','Disable
     return $output.Trim()
   } finally {$process.Dispose()}
 }
+function Ensure-SetupDesktopShortcut {
+  try {
+    $desktop=if($script:SetupDesktopPath){$script:SetupDesktopPath}else{[Environment]::GetFolderPath('Desktop')}
+    if(-not $desktop -or -not (Test-Path -LiteralPath $desktop)){return}
+    $path=Join-Path $desktop 'Start SoundForge.lnk'
+    $shell=New-Object -ComObject WScript.Shell
+    $shortcut=$shell.CreateShortcut($path)
+    $shortcut.TargetPath=Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $shortcut.Arguments='-NoProfile -ExecutionPolicy Bypass -File "'+(Join-Path $script:SetupRoot 'Bridge.ps1')+'" -Action Start'
+    $shortcut.WorkingDirectory=$script:SetupRoot
+    $shortcut.WindowStyle=7
+    $ico=Join-Path $env:LOCALAPPDATA 'SurroundForge\surroundforge.ico'
+    if(Test-Path -LiteralPath $ico){$shortcut.IconLocation="$ico,0"}
+    $shortcut.Description='Start SurroundForge 5.1 optical audio engine and controller'
+    $shortcut.Save()
+  } catch {}
+}
+
 function Save-SetupConfiguration([string]$InputId,[string]$OutputId,[bool]$Startup) {
   # Re-read endpoint identity immediately before changing anything.
   $devices=Get-SetupDevices
@@ -122,6 +140,7 @@ function Save-SetupConfiguration([string]$InputId,[string]$OutputId,[bool]$Start
   } finally {if(Test-Path -LiteralPath $pending){Remove-Item -LiteralPath $pending}}
   Invoke-SetupBridge Start | Out-Null
   if($Startup){Invoke-SetupBridge EnableStartup | Out-Null}else{Invoke-SetupBridge DisableStartup | Out-Null}
+  Ensure-SetupDesktopShortcut
 }
 
 function Get-SetupCmediaInstaller {

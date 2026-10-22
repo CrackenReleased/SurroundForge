@@ -27,7 +27,7 @@ function Get-SpeakerLayoutSequence([ValidateSet('stereo','5.1','7.1')][string]$L
 
 function Get-TrayStatus($Snapshot,$Previous,[datetime]$Now=[datetime]::UtcNow) {
   $result=[pscustomobject]@{Label='Stopped';Tone='Gray';Detail='Choose Start audio to enable surround.';Rate=$null}
-  if($Snapshot.Error){$result.Label='Needs attention';$result.Tone='Red';$result.Detail='Status could not be read. Try Restart audio.';return $result}
+  if($Snapshot.Error){$result.Label='Off';$result.Tone='Red';$result.Detail='Audio service is offline or unreachable. Try Restart audio.';return $result}
   if(-not $Snapshot.Running) {
     if($Snapshot.Supervised){$result.Label='Recovering';$result.Tone='Amber';$result.Detail='Automatic recovery is retrying. Check the USB connection.'}
     return $result
@@ -461,8 +461,8 @@ function Show-TrayUi {
   Register-TrayNativeTypes
   [Windows.Forms.Application]::EnableVisualStyles()
   [SurroundForgeTrayIcon]::HideConsole()
-  $script:TrayColors=@{Green=[Drawing.Color]::FromArgb(20,148,115);Amber=[Drawing.Color]::FromArgb(210,128,12);Red=[Drawing.Color]::FromArgb(205,48,58);Gray=[Drawing.Color]::FromArgb(100,112,125)}
-  $script:TrayWaveColors=@{Green=[Drawing.Color]::FromArgb(0,228,196);Amber=[Drawing.Color]::FromArgb(250,176,20);Red=[Drawing.Color]::FromArgb(248,82,92);Gray=[Drawing.Color]::FromArgb(130,145,165)}
+  $script:TrayColors=@{Green=[Drawing.Color]::FromArgb(0,168,142);Amber=[Drawing.Color]::FromArgb(210,115,0);Red=[Drawing.Color]::FromArgb(205,40,50);Gray=[Drawing.Color]::FromArgb(90,105,125)}
+  $script:TrayWaveColors=@{Green=[Drawing.Color]::FromArgb(0,228,196);Amber=[Drawing.Color]::FromArgb(250,160,10);Red=[Drawing.Color]::FromArgb(248,65,75);Gray=[Drawing.Color]::FromArgb(130,145,165)}
   $script:TrayIcons=@{};$script:TrayBitmaps=@{}
   foreach($tone in $script:TrayColors.Keys){
     $script:TrayIcons[$tone]=[SurroundForgeTrayIcon]::Create($script:TrayWaveColors[$tone])
@@ -475,7 +475,7 @@ function Show-TrayUi {
   $form.AutoScaleMode='Dpi'
   $logoBox=New-Object Windows.Forms.PictureBox
   $logoBox.Location=New-Object Drawing.Point(24,20);$logoBox.Size=New-Object Drawing.Size(52,52)
-  $logoBox.SizeMode='StretchImage';$logoBox.Image=$script:TrayBitmaps.Gray
+  $logoBox.SizeMode='StretchImage';$logoBox.Image=$script:TrayBitmaps.Green
   $form.Controls.Add($logoBox)
   function Add-TrayLabel($Parent,$Text,$X,$Y,$Width,$Height,$Size=10,$Style=[Drawing.FontStyle]::Regular) {
     $label=New-Object Windows.Forms.Label;$label.Text=$Text

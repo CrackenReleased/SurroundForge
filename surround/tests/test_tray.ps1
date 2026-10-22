@@ -85,6 +85,12 @@ Assert (($events -join ',') -eq 'disable,stop,wait,start,supervise') 'Start fail
 Assert ($retryIntent.inputId -eq $inputId -and $retryIntent.defaults.'1' -eq 'headset') 'Failed restart must retain exact recovery intent'
 $traySource = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\Tray.ps1') -Raw
 Assert ($traySource -match 'FillPolygon' -and $traySource -match 'DrawArc' -and $traySource -notmatch 'DrawString\("S"') 'Tray icon must render the custom Sonic Anvil vector logo rather than a generic letter S'
+Assert ($traySource -match 'Green=\[Drawing\.Color\]::FromArgb\(0,228,196\)' -and $traySource -match 'Amber=\[Drawing\.Color\]::FromArgb\(250,160,10\)' -and $traySource -match 'Gray=\[Drawing\.Color]::FromArgb\(130,145,165\)' -and $traySource -match 'Red=\[Drawing\.Color]::FromArgb\(248,65,75\)') 'Controller must configure teal for on, orange for issues, gray for stopped, and red for off'
+Assert ($traySource -match 'if\(\$script:TrayUi\.LogoBox\)\{\$script:TrayUi\.LogoBox\.Image=\$script:TrayBitmaps\[\$status\.Tone\]\}') 'Update-TrayUi must dynamically update logo box image based on status tone'
+Assert ($traySource -match '\$script:TrayUi\.Form\.Icon=\$script:TrayIcons\[\$status\.Tone\]') 'Update-TrayUi must dynamically update window icon based on status tone'
+Assert ($traySource -match '\$script:TrayUi\.Icon\.Icon=\$script:TrayIcons\[\$status\.Tone\]') 'Update-TrayUi must dynamically update notification tray icon based on status tone'
+$bridgeSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\Bridge.ps1') -Raw
+Assert ($bridgeSource -match 'IconLocation=Join-Path \$env:LOCALAPPDATA ''SurroundForge\\surroundforge\.ico,0''') 'Startup shortcut must link to canonical surroundforge.ico'
 Assert ($traySource -match 'Stop audio & close') 'Tray controller must provide a Stop audio & close action to stop the engine and exit cleanly'
 Assert ($traySource -match 'EnsureDefaultDesktop' -and $traySource -match 'SurroundForge_Tray_Launch' -and $traySource -match 'Ensure-SurroundForgeHost') 'Tray controller must relaunch via SurroundForge.exe onto Default desktop with Sonic Anvil Win32 icon'
 $catalog = @(Get-SpeakerCatalog)

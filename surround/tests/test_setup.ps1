@@ -34,6 +34,8 @@ $script:Fixture=[IO.Path]::GetFullPath((Join-Path $allowed 'setup-regression'))
 Assert ($script:Fixture.StartsWith($allowed+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) 'Fixture must remain inside tests/output'
 New-Item -ItemType Directory -Path $script:Fixture -Force | Out-Null
 $script:SetupRoot=$script:Fixture
+$script:SetupDesktopPath=Join-Path $script:Fixture 'Desktop'
+New-Item -ItemType Directory -Path $script:SetupDesktopPath -Force | Out-Null
 $script:Calls=@();$script:FormatFails=$false;$script:StartFails=$false;$script:KeepState=$false
 function Get-SetupDevices {return $script:Devices}
 function Invoke-SetupControl([string[]]$Arguments) {
@@ -80,6 +82,13 @@ try {
   Assert (-not (Test-Path -LiteralPath ($config+'.new'))) 'Atomic configuration staging file must be cleaned'
   $bytes=[IO.File]::ReadAllBytes($config)
   Assert (-not ($bytes[0] -eq 239 -and $bytes[1] -eq 187 -and $bytes[2] -eq 191)) 'Native config must not gain a UTF-8 BOM'
+  $desktopShortcut=Join-Path $script:SetupDesktopPath 'Start SoundForge.lnk'
+  Assert (Test-Path -LiteralPath $desktopShortcut) 'Save-SetupConfiguration must create desktop start shortcut'
+  $testShell=New-Object -ComObject WScript.Shell
+  $testSc=$testShell.CreateShortcut($desktopShortcut)
+  Assert ($testSc.Arguments -like "*-Action Start*") 'Desktop shortcut must invoke Action Start'
+  Assert ($testSc.WorkingDirectory -eq $script:Fixture) 'Desktop shortcut must point to SetupRoot'
+  Assert ($testSc.WindowStyle -eq 7) 'Desktop shortcut must run minimized (style 7)'
 
   $script:Calls=@()
   Expect-Failure {Save-SetupConfiguration 'virtual' 'virtual-stereo' $false} 'physical optical'
