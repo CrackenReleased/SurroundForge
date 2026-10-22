@@ -10,6 +10,12 @@ This setup once retained six channels but lost the speaker assignments (`mask=0x
 
 Start the bridge before opening the game. Use the game's speaker/home-theater settings and disable headphone/binaural modes where appropriate. Restart a game that was already open when the Windows output configuration changed.
 
+## Desktop or sign-in shortcut does not open the controller
+
+Both shortcuts start `Bridge.ps1 -Action Start`, which leaves an already running encoder in place and opens the controller. If the window does not appear, check `%LOCALAPPDATA%\SurroundForge\controller-launch.log` for a controller script, GUI host, or desktop handoff error. The GUI host writes a nonzero exit status and shows an error dialog for controller failures; a successful task submission alone does not count as a running controller.
+
+If the controller says **Recovering**, its detail shows the saved failure reason. `surround\supervisor.log` retains the native startup error excerpt before the next retry replaces `bridge.log`. Use `Bridge.ps1 -Action Status` to check `Running` and `Supervised`; do not change audio endpoints solely because the controller window is missing.
+
 ## Silence or wrong output
 
 Check the receiver's optical input selection, optical OUT on the USB adapter, **SPDIF Out** in C-Media/Xear settings, and the physical output selected in Setup. The encoded optical endpoint is opened exclusively by the bridge. Stop another player that is using that same optical output directly, and use the virtual input for ordinary PC/game audio.

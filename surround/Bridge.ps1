@@ -240,6 +240,15 @@ function Write-SupervisorLog([string]$Message) {
   }
   "$( [datetime]::UtcNow.ToString('o')) $Message" | Add-Content -LiteralPath $supervisorLog -Encoding UTF8
 }
+function Write-ControllerLaunchFailure([string]$Message,[string]$AppDir=(Join-Path $env:LOCALAPPDATA 'SurroundForge')) {
+  try {
+    if(-not (Test-Path -LiteralPath $AppDir)){New-Item -ItemType Directory -Path $AppDir -Force | Out-Null}
+    $path=Join-Path $AppDir 'controller-launch.log'
+    $entry="$([datetime]::Now.ToString('o')) $Message`r`n"
+    if((Test-Path -LiteralPath $path) -and (Get-Item -LiteralPath $path).Length -ge 65536){[IO.File]::WriteAllText($path,$entry)}
+    else {[IO.File]::AppendAllText($path,$entry)}
+  } catch {Write-Warning "Could not save controller launch error: $_"}
+}
 function Test-SupervisorIdentity($State) {
   if(-not $State){return $false}
   try {
@@ -352,6 +361,17 @@ function Invoke-SupervisorStep($Supervisor,$State,[string]$Generation,[datetime]
   }
   Write-SupervisorState $Supervisor
 }
+function Get-BridgeStartupFailureDetail([string]$Path=$log) {
+  try {
+    if(-not (Test-Path -LiteralPath $Path)){return 'No engine log was written.'}
+    $lines=@(Get-Content -LiteralPath $Path -Tail 8 -ErrorAction Stop | Where-Object {$_ -and $_.Trim()})
+    if(-not $lines.Count){return 'The engine log is empty.'}
+    $reason=@($lines | Where-Object {$_ -match '(?i)\berror\b|\bfailed\b|unavailable|access denied|0x[0-9a-f]{8}'}) | Select-Object -Last 1
+    $detail=if($reason){[string]$reason}else{[string]$lines[-1]}
+    if($detail.Length -gt 250){return $detail.Substring(0,247)+'...'}
+    return $detail
+  } catch {return "Could not read the engine log: $_"}
+}
 function Start-Bridge([switch]$Recovery,$Intent=$null) {
   Assert-BridgeRuntime
   $state=Read-BridgeState
@@ -395,10 +415,10 @@ function Start-Bridge([switch]$Recovery,$Intent=$null) {
     for($attempt=0;$attempt -lt 50;$attempt++) {
       Start-Sleep -Milliseconds 100
       $process.Refresh()
-      if($process.HasExited){throw "Encoder exited. See $log"}
+      if($process.HasExited){throw "Encoder exited. $(Get-BridgeStartupFailureDetail $log) See $log"}
       if((Get-Content -LiteralPath $log -Raw) -match 'Running\. Press Ctrl\+C'){$ready=$true;break}
     }
-    if(-not $ready){throw "Encoder did not become ready. See $log"}
+    if(-not $ready){throw "Encoder did not become ready. $(Get-BridgeStartupFailureDetail $log) See $log"}
     foreach($role in $routeRoles){Invoke-Control @('--default',$inputId,$role) | Out-Null}
     Write-Output "SurroundForge running (PID $($process.Id)). Games use the configured virtual 5.1 input."
   } catch {
@@ -417,15 +437,24 @@ function Get-BridgeSnapshot {
     $health=if(Test-Path -LiteralPath $healthPath){Read-BridgeHealth}else{$null}
     return [pscustomobject]@{Running=[bool]$process;ProcessId=if($process){$process.Id}else{0};
       Supervised=[bool]($watch -and $watch.desiredRunning -eq $true -and (Test-SupervisorIdentity $watch));
-      Health=$health;Error='';Version='0.1.16'}
-  } catch {return [pscustomobject]@{Running=$false;ProcessId=0;Supervised=$false;Health=$null;Error="$($_)";Version='0.1.16'}}
+      Health=$health;Failure=if($watch){$watch.lastFailure}else{''};Error='';Version='0.1.19'}
+  } catch {return [pscustomobject]@{Running=$false;ProcessId=0;Supervised=$false;Health=$null;Failure='';Error="$($_)";Version='0.1.19'}}
 }
 function Ensure-BridgeTray {
   $tray=Join-Path $root 'Tray.ps1'
-  if(-not (Test-Path -LiteralPath $tray)){return}
+  if(-not (Test-Path -LiteralPath $tray)){
+    $message="Controller script is missing: $tray"
+    Write-ControllerLaunchFailure $message
+    Write-Warning $message
+    return
+  }
   try {
     Start-Process -FilePath (Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe') -ArgumentList @('-NoProfile','-STA','-ExecutionPolicy','Bypass','-File',('"'+$tray+'"'),'-Show') -WorkingDirectory $root | Out-Null
-  } catch {Write-Warning "Audio is available, but the status icon could not start: $_"}
+  } catch {
+    $message="Audio is available, but the controller could not start: $_"
+    Write-ControllerLaunchFailure $message
+    Write-Warning $message
+  }
 }
 function Restart-Bridge {
   # Caller holds the lifecycle mutex. Keep rollback state and current default

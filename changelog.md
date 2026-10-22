@@ -1,3 +1,9 @@
+## v0.1.19-local — 2026-10-21 — Controller and startup error reporting
+
+- The GUI host now returns a failure code, writes a bounded user-local `controller-launch.log`, and shows a launch error dialog when its PowerShell controller fails. Updated controller source rebuilds the generated host on the next launch.
+- Desktop handoff and missing-controller failures are logged instead of silently treated as success. When the encoder exits during startup, the supervisor retains a short native error excerpt before the next retry replaces the engine log.
+- The controller shows recorded recovery and status-read errors. Fixture tests cover successful hosting, terminating and nonterminating host errors, missing controller files, and recovery detail.
+
 ## v0.1.18-local — 2026-10-21 — Restore desktop and sign-in controller launch
 
 - Launch the controller host directly when `Tray.ps1` already runs on the visible Windows desktop. The previous path sent every launch through a scheduled task, which completed without leaving the controller window running on this PC.
