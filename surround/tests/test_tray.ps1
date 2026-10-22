@@ -98,6 +98,7 @@ Assert ($traySource -match '\$script:TrayUi\.Icon\.Icon=\$script:TrayIcons\[\$st
 $bridgeSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\Bridge.ps1') -Raw
 Assert ($bridgeSource -match 'IconLocation=Join-Path \$env:LOCALAPPDATA ''SurroundForge\\surroundforge\.ico,0''') 'Startup shortcut must link to canonical surroundforge.ico'
 Assert ($traySource -match 'Stop audio & close') 'Tray controller must provide a Stop audio & close action to stop the engine and exit cleanly'
+Assert ($traySource -match 'Add_FormClosing\(\{[^\r\n]*Start-TrayAction Stop -ExitAfter') 'Closing the controller window must stop audio before exiting'
 Assert ($traySource -match 'EnsureDefaultDesktop' -and $traySource -match 'SurroundForge_Tray_Launch' -and $traySource -match 'Ensure-SurroundForgeHost') 'Tray controller must relaunch via SurroundForge.exe onto Default desktop with Sonic Anvil Win32 icon'
 Assert ((Get-TrayLaunchMode 'Default' 'powershell') -eq 'Direct') 'A normal desktop shortcut must launch the GUI host directly rather than through Task Scheduler'
 Assert ((Get-TrayLaunchMode 'Default' 'SurroundForge') -eq 'InProcess') 'The GUI host must not relaunch itself'

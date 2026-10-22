@@ -1,4 +1,4 @@
-<# SurroundForge bridge, v0.1.15-local. Only controls this project's encoder. #>
+<# SurroundForge bridge, v0.1.20-local. Only controls this project's encoder. #>
 [CmdletBinding()]
 param([ValidateSet('Start','Stop','Restart','Status','Test','Diagnostics','EnableStartup','DisableStartup','Watch')][string]$Action='Start',
   [string]$Session='',[switch]$FunctionsOnly)
@@ -84,6 +84,33 @@ function Ensure-VirtualMix51 {
     $format=Invoke-Control @('--format',$inputId)
     if(-not (Test-VirtualMix51 $format)){throw 'Virtual input must have six assigned 5.1 speakers (mask 0x3f) at 48000 Hz.'}
   }
+}
+function Set-BridgeVirtualVisibility([bool]$Visible) {
+  if(-not $inputId){return}
+  $value=if($Visible){'1'}else{'0'}
+  Invoke-Control @('--visibility',$inputId,$value) | Out-Null
+}
+function Hide-BridgeLegacyCableInput {
+  # The stereo endpoint is a distinct, unused render endpoint on the same
+  # VB-CABLE driver. Never disable its shared parent driver or configured input.
+  try {
+    $json=(Invoke-Control @('--devices-json')) -join "`n"
+    $devices=ConvertFrom-Json -InputObject $json
+    foreach($device in $devices) {
+      if($device.name -eq 'CABLE Input (VB-Audio Virtual Cable)' -and $device.id -ne $inputId) {
+        Invoke-Control @('--visibility',$device.id,'0') | Out-Null
+      }
+    }
+  } catch {Write-Warning "Could not hide the unused CABLE Input endpoint: $_"}
+}
+function Restore-BridgeCommunicationDefault {
+  if(-not $inputId){return}
+  $current=@{}
+  Invoke-Control @('--defaults') | ForEach-Object {if($_ -match '^([012])=(.+)$'){$current[$Matches[1]]=$Matches[2]}}
+  if($current['2'] -ne $inputId){return}
+  $fallback=if($current['0'] -and $current['0'] -ne $inputId){$current['0']}elseif($current['1'] -and $current['1'] -ne $inputId){$current['1']}else{$null}
+  if(-not $fallback){throw 'Cannot hide SurroundForge while it is the only playback default. Select a physical output first.'}
+  Invoke-Control @('--default',$fallback,'2') | Out-Null
 }
 function Save-BridgeDiagnostics {
   # Explicit, local evidence capture. Does not enable event channels or clear logs.
@@ -388,27 +415,37 @@ function Start-Bridge([switch]$Recovery,$Intent=$null) {
   }
   if($configuredInput -ne $inputId -or $configuredOutput -ne $outputId -or
      (($Recovery -or $owned) -and $state -and (($state.inputId -and $state.inputId -ne $inputId) -or ($state.outputId -and $state.outputId -ne $outputId)))) {throw 'Device configuration changed; Stop and Start to apply it safely.'}
+  Hide-BridgeLegacyCableInput
+  Set-BridgeVirtualVisibility $true
   if($owned) {
     if(Test-VirtualMix51 (Invoke-Control @('--format',$inputId))){Write-Output "5.1 bridge already running (PID $($owned.Id)).";return}
     if(-not (Stop-BridgeAndRestore $state $owned)){throw 'Could not stop the bridge safely before repairing its speaker layout.'}
-    $state=$null
+    $state=$null;$owned=$null
   }
-  Ensure-VirtualMix51
-  $current=@{}
-  Invoke-Control @('--defaults') | ForEach-Object {if($_ -match '^([012])=(.+)$'){$current[$Matches[1]]=$Matches[2]}}
-  $defaults=@{};foreach($role in '0','1','2'){$defaults[$role]=$current[$role]}
-  if($state){foreach($role in '0','1','2'){if($defaults[$role] -eq $inputId){$defaults[$role]=Get-SavedDefault $state $role}}}
-  $roles=@('0','1')
-  if($defaults['2'] -eq $outputId -or $defaults['2'] -eq $inputId){$roles+='2'}
-  if($Recovery -and $state){$defaults=$state.defaults;$roles=@($state.roles)}
-  if($Recovery -and $Intent){$defaults=$Intent.defaults;$roles=@($Intent.roles)}
-  $routeRoles=if($Recovery -and $Intent){@(Get-StartupRecoveryRoles $Intent $current)}elseif($Recovery -and $state){@(Get-RecoveryRoles $state $current $inputId)}else{$roles}
-  if(Test-Path -LiteralPath $log){Copy-Item -LiteralPath $log -Destination ($log+'.previous') -Force}
-  [IO.File]::WriteAllText($log,"Started: $((Get-Date).ToString('o'))`r`n")
-  if(Test-Path -LiteralPath $healthPath){Remove-Item -LiteralPath $healthPath}
-  $arguments=@('--config',('"'+$config+'"'),'--require-surround','--hidden','--log',('"'+$log+'"'),'--activity-log',('"'+(Join-Path $root 'channel-activity.csv')+'"'),'--health-log',('"'+$healthPath+'"'))
-  $process=Start-Process -FilePath $engine -ArgumentList $arguments -WorkingDirectory $root -WindowStyle Hidden -PassThru
-  $newState=[pscustomobject]@{version='0.1.15-local';processId=$process.Id;startedTicks=$process.StartTime.ToUniversalTime().Ticks;defaults=$defaults;roles=$roles;inputId=$inputId;outputId=$outputId}
+  try {
+    Ensure-VirtualMix51
+    $current=@{}
+    Invoke-Control @('--defaults') | ForEach-Object {if($_ -match '^([012])=(.+)$'){$current[$Matches[1]]=$Matches[2]}}
+    $defaults=@{};foreach($role in '0','1','2'){$defaults[$role]=$current[$role]}
+    if($state){foreach($role in '0','1','2'){if($defaults[$role] -eq $inputId){$defaults[$role]=Get-SavedDefault $state $role}}}
+    $roles=@('0','1')
+    if($defaults['2'] -eq $outputId -or $defaults['2'] -eq $inputId){$roles+='2'}
+    if($Recovery -and $state){$defaults=$state.defaults;$roles=@($state.roles)}
+    if($Recovery -and $Intent){$defaults=$Intent.defaults;$roles=@($Intent.roles)}
+    $routeRoles=if($Recovery -and $Intent){@(Get-StartupRecoveryRoles $Intent $current)}elseif($Recovery -and $state){@(Get-RecoveryRoles $state $current $inputId)}else{$roles}
+    if(Test-Path -LiteralPath $log){Copy-Item -LiteralPath $log -Destination ($log+'.previous') -Force}
+    [IO.File]::WriteAllText($log,"Started: $((Get-Date).ToString('o'))`r`n")
+    if(Test-Path -LiteralPath $healthPath){Remove-Item -LiteralPath $healthPath}
+    $arguments=@('--config',('"'+$config+'"'),'--require-surround','--hidden','--log',('"'+$log+'"'),'--activity-log',('"'+(Join-Path $root 'channel-activity.csv')+'"'),'--health-log',('"'+$healthPath+'"'))
+    $process=Start-Process -FilePath $engine -ArgumentList $arguments -WorkingDirectory $root -WindowStyle Hidden -PassThru
+    $newState=[pscustomobject]@{version='0.1.15-local';processId=$process.Id;startedTicks=$process.StartTime.ToUniversalTime().Ticks;defaults=$defaults;roles=$roles;inputId=$inputId;outputId=$outputId}
+  } catch {
+    if(-not $owned){
+      try {Restore-BridgeCommunicationDefault;Set-BridgeVirtualVisibility $false}
+      catch {Write-Warning "Could not hide the virtual endpoint after launch preparation failed: $_"}
+    }
+    throw
+  }
   try {
     Write-BridgeJson $newState $statePath
     $ready=$false
@@ -423,8 +460,11 @@ function Start-Bridge([switch]$Recovery,$Intent=$null) {
     Write-Output "SurroundForge running (PID $($process.Id)). Games use the configured virtual 5.1 input."
   } catch {
     $startupFailure=$_
-    if($Recovery) {Stop-Process -Id $process.Id -ErrorAction SilentlyContinue}
-    else {Stop-BridgeAndRestore $newState $process | Out-Null}
+    $cleaned=Stop-BridgeAndRestore $newState $process
+    if($cleaned){
+      try {Restore-BridgeCommunicationDefault;Set-BridgeVirtualVisibility $false}
+      catch {Write-Warning "Could not hide the virtual endpoint after startup failed: $_"}
+    } else {Write-Warning 'Startup rollback is incomplete; keeping the virtual endpoint available for another Stop retry.'}
     throw $startupFailure
   }
 }
@@ -437,8 +477,8 @@ function Get-BridgeSnapshot {
     $health=if(Test-Path -LiteralPath $healthPath){Read-BridgeHealth}else{$null}
     return [pscustomobject]@{Running=[bool]$process;ProcessId=if($process){$process.Id}else{0};
       Supervised=[bool]($watch -and $watch.desiredRunning -eq $true -and (Test-SupervisorIdentity $watch));
-      Health=$health;Failure=if($watch){$watch.lastFailure}else{''};Error='';Version='0.1.19'}
-  } catch {return [pscustomobject]@{Running=$false;ProcessId=0;Supervised=$false;Health=$null;Failure='';Error="$($_)";Version='0.1.19'}}
+      Health=$health;Failure=if($watch){$watch.lastFailure}else{''};Error='';Version='0.1.20'}
+  } catch {return [pscustomobject]@{Running=$false;ProcessId=0;Supervised=$false;Health=$null;Failure='';Error="$($_)";Version='0.1.20'}}
 }
 function Ensure-BridgeTray {
   $tray=Join-Path $root 'Tray.ps1'
@@ -528,10 +568,15 @@ try {
     $supervisor=try {Read-BridgeJson $supervisorPath} catch {$null}
     [pscustomobject]@{Version='0.1.15-local';Running=[bool]$owned;ProcessId=if($owned){$owned.Id}else{$null};
       Supervised=[bool]($supervisor -and $supervisor.desiredRunning -eq $true -and (Test-SupervisorIdentity $supervisor));Log=$log;Health=try {Read-BridgeHealth} catch {$null}}
-    Invoke-Control @('--defaults');if($inputId){Invoke-Control @('--format',$inputId)};exit
+    Invoke-Control @('--defaults');if($inputId -and $owned){Invoke-Control @('--format',$inputId)};exit
   }
   if($Action -eq 'Stop') {
-    if(Stop-BridgeAndRestore $state $owned){Write-Output '5.1 bridge stopped; prior playback defaults restored.'}
+    Hide-BridgeLegacyCableInput
+    if(Stop-BridgeAndRestore $state $owned){
+      Restore-BridgeCommunicationDefault
+      Set-BridgeVirtualVisibility $false
+      Write-Output '5.1 bridge stopped; prior playback defaults restored and virtual input hidden.'
+    }
     else {Write-Warning 'Bridge cleanup incomplete; saved rollback state retained for a later Stop retry.'}
     exit
   }

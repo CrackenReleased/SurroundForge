@@ -1,3 +1,10 @@
+## v0.1.20-local — 2026-10-22 — Sound output availability follows the audio engine
+
+- Hide the unused `CABLE Input (VB-Audio Virtual Cable)` playback endpoint by exact ID, while leaving its shared VB-Audio driver and the configured six-channel endpoint intact.
+- Show the configured SurroundForge endpoint before audio starts; restore Windows defaults and hide it when audio stops or startup fails. The communications playback role no longer remains on a stopped virtual endpoint.
+- Treat the controller window's X as **Stop audio & close**. The explicit **Hide controller (audio continues)** action keeps audio running. Setup can discover a hidden configured endpoint and shows it only while configuring or running audio.
+- Add native visibility guards and regression coverage for lifecycle, setup, and controller close behavior. The current host's optical endpoint could not initialize during live startup verification; failed startup left both virtual outputs hidden and Realtek selected.
+
 ## v0.1.19-local — 2026-10-21 — Controller and startup error reporting
 
 - The GUI host now returns a failure code, writes a bounded user-local `controller-launch.log`, and shows a launch error dialog when its PowerShell controller fails. Updated controller source rebuilds the generated host on the next launch.

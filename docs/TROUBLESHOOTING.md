@@ -16,6 +16,12 @@ Both shortcuts start `Bridge.ps1 -Action Start`, which leaves an already running
 
 If the controller says **Recovering**, its detail shows the saved failure reason. `surround\supervisor.log` retains the native startup error excerpt before the next retry replaces `bridge.log`. Use `Bridge.ps1 -Action Status` to check `Running` and `Supervised`; do not change audio endpoints solely because the controller window is missing.
 
+## SurroundForge is missing from Windows Sound Output
+
+The configured virtual endpoint is hidden while SurroundForge audio is stopped. Use **Start audio** in the controller or the desktop shortcut to make it available. X and **Stop audio & close** stop audio, restore prior defaults, and hide the endpoint; **Hide controller (audio continues)** keeps audio running. Setup can still find the hidden configured endpoint. The separate unused **CABLE Input (VB-Audio Virtual Cable)** playback endpoint stays hidden without disabling the shared VB-Audio driver.
+
+If startup fails, the endpoint is hidden again and the controller reports the recovery error. On this host, live startup currently reports an optical passthrough initialization error (`0x88890004`); check the physical optical output and C-Media/Xear **SPDIF Out** setting before retrying.
+
 ## Silence or wrong output
 
 Check the receiver's optical input selection, optical OUT on the USB adapter, **SPDIF Out** in C-Media/Xear settings, and the physical output selected in Setup. The encoded optical endpoint is opened exclusively by the bridge. Stop another player that is using that same optical output directly, and use the virtual input for ordinary PC/game audio.

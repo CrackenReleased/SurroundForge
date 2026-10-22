@@ -63,7 +63,7 @@ bool ContainsCI(const std::wstring& hay, const std::wstring& needle)
 
 namespace DeviceEnum {
 
-std::vector<EndpointInfo> List(EDataFlow flow)
+std::vector<EndpointInfo> List(EDataFlow flow, DWORD states)
 {
   std::vector<EndpointInfo> out;
   ComPtr<IMMDeviceEnumerator> en;
@@ -72,7 +72,7 @@ std::vector<EndpointInfo> List(EDataFlow flow)
     return out;
 
   ComPtr<IMMDeviceCollection> coll;
-  if (FAILED(en->EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE, &coll)))
+  if (FAILED(en->EnumAudioEndpoints(flow, states, &coll)))
     return out;
 
   UINT count = 0;

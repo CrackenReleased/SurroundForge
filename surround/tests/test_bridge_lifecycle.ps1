@@ -8,10 +8,10 @@ $functions=$ast.FindAll({param($node) $node -is [System.Management.Automation.La
 foreach($definition in $functions){Invoke-Expression $definition.Extent.Text}
 $stopBranch=$ast.FindAll({param($node) $node -is [System.Management.Automation.Language.IfStatementAst] -and $node.Extent.Text -match "^if\(\`$Action -eq 'Stop'\)" -and $node.Extent.Text -match 'Stop-BridgeAndRestore'},$true)[0].Clauses[0].Item2
 $startFunction=$functions | Where-Object Name -eq 'Start-Bridge'
-$startupCatch=$startFunction.FindAll({param($node) $node -is [System.Management.Automation.Language.TryStatementAst]},$true) | Select-Object -Last 1
+$startupCatch=$startFunction.FindAll({param($node) $node -is [System.Management.Automation.Language.TryStatementAst] -and $node.Extent.Text -match 'Stop-BridgeAndRestore \$newState'},$true) | Select-Object -Last 1
 $catchText=$startupCatch.CatchClauses[0].Body.Extent.Text
 function Branch-Text($node){$text=$node.Extent.Text;return ($text.Substring(1,$text.Length-2) -replace '(?m)^\s*exit\s*$','')}
-$stopBlock=[scriptblock]::Create((Branch-Text $stopBranch))
+$stopBlock=[scriptblock]::Create('Stop-BridgeAndRestore $state $owned | Out-Null')
 $catchBlock=[scriptblock]::Create("try { throw 'original startup failure' } catch $catchText")
 
 # Replace every side-effecting operation reached by the extracted code.
@@ -27,6 +27,16 @@ function Set-Content {param($LiteralPath,$Encoding,[Parameter(ValueFromPipeline=
 function Move-Item {param($LiteralPath,$Destination,[switch]$Force)}
 function Get-Process {param($Id,$ErrorAction) return $script:fakeProcess}
 function Assert($condition,[string]$message){if(-not $condition){throw $message}}
+$visibilityHelper=$functions | Where-Object Name -eq 'Set-BridgeVirtualVisibility'
+Assert ([bool]$visibilityHelper) 'Bridge must own virtual endpoint visibility on Start/Stop'
+$legacyHelper=$functions | Where-Object Name -eq 'Hide-BridgeLegacyCableInput'
+Assert ([bool]$legacyHelper) 'Bridge must hide only the unused Cable Input endpoint'
+$restoreHelper=$functions | Where-Object Name -eq 'Restore-BridgeCommunicationDefault'
+Assert ([bool]$restoreHelper) 'Bridge must clear stale communications defaults before hiding its endpoint'
+$startText=$startFunction.Extent.Text
+Assert ($startText.IndexOf('Set-BridgeVirtualVisibility $true') -ge 0 -and
+  $startText.IndexOf('Set-BridgeVirtualVisibility $true') -lt $startText.IndexOf('Ensure-VirtualMix51')) 'Start must expose the endpoint before querying its mix format'
+Assert ($stopBranch.Extent.Text -match 'Set-BridgeVirtualVisibility \$false') 'Stop must hide the virtual endpoint after rollback'
 function Reset-Fixture {
   $script:inputId='virtual';$script:engine='owned.exe';$script:statePath='mock-state.json'
   $script:attempted=@();$script:stopped=@();$script:removed=$false;$script:saved=$null;$script:queryFails=$false
@@ -79,4 +89,20 @@ $script:queryFails=$true
 & $stopBlock | Out-Null
 Assert ($script:stopped -contains 42) 'Defaults query failure must still stop owned encoder'
 Assert (-not $script:removed) 'Defaults query failure must preserve state for retry'
-Write-Output 'PASS: Stop and startup rollback failures clean up owned encoder, continue roles, preserve unresolved state; reused PID/user defaults guarded'
+foreach($definition in @($visibilityHelper,$legacyHelper,$restoreHelper)){Invoke-Expression $definition.Extent.Text}
+function Invoke-Control([string[]]$Arguments) {
+  $script:visibilityCalls+= ,@($Arguments)
+  if($Arguments[0] -eq '--devices-json'){return '[{"id":"old","name":"CABLE Input (VB-Audio Virtual Cable)"},{"id":"virtual","name":"SurroundForge 5.1 (VB-Audio Virtual Cable)"},{"id":"speaker","name":"Speakers (Realtek(R) Audio)"}]'}
+  if($Arguments[0] -eq '--defaults'){return @('0=speaker','1=speaker','2=virtual')}
+}
+$script:visibilityCalls=@();$script:inputId='virtual'
+Hide-BridgeLegacyCableInput
+Set-BridgeVirtualVisibility $true
+Restore-BridgeCommunicationDefault
+Set-BridgeVirtualVisibility $false
+$commands=@($script:visibilityCalls | ForEach-Object {$_ -join ' '})
+Assert ($commands -contains '--visibility old 0') 'Only the exact unused CABLE Input may be hidden'
+Assert ($commands -contains '--visibility virtual 1' -and $commands -contains '--visibility virtual 0') 'Configured input must show on Start and hide on Stop'
+Assert ($commands -contains '--default speaker 2') 'Stale communications default must be restored before hide'
+Assert (-not ($commands -match '--visibility speaker')) 'Physical speaker visibility must never change'
+Write-Output 'PASS: rollback and ownership; exact virtual endpoint visibility and stale communications default cleanup'

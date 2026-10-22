@@ -26,8 +26,8 @@ function Test-SetupMultichannelInput($Device) {
     $Device.name -match '(?i)^Virtual AC3 Encoder\b')
 }
 function Get-SetupDevices {
-  $json=(Invoke-SetupControl @('--devices-json')) -join [Environment]::NewLine
-  $devices=@($json | ConvertFrom-Json)
+  $json=(Invoke-SetupControl @('--devices-json-all')) -join [Environment]::NewLine
+  $devices=ConvertFrom-Json -InputObject $json
   foreach($device in $devices) {
     if(-not $device.id -or -not $device.name){throw 'The audio device list could not be read. Please refresh.'}
   }
@@ -46,9 +46,11 @@ function Get-SetupHardware {
   } catch {$errorText='Windows could not check the connected USB adapter. Refresh after connecting it.'}
   return [pscustomobject]@{Attached=$attached;Installed=$installed;ErrorText=$errorText}
 }
-function Get-SetupSelection($Devices,[string]$SavedOutput) {
-  $inputDevice=@($Devices | Where-Object {Test-SetupMultichannelInput $_}) | Select-Object -First 1
-  $outputs=@($Devices | Where-Object {$_.isSpdif -and -not (Test-SetupVirtualOutput $_)})
+function Get-SetupSelection($Devices,[string]$SavedOutput,[string]$SavedInput='') {
+  $inputs=@($Devices | Where-Object {Test-SetupMultichannelInput $_})
+  $inputDevice=@($inputs | Where-Object {$_.id -eq $SavedInput}) | Select-Object -First 1
+  if(-not $inputDevice){$inputDevice=$inputs | Select-Object -First 1}
+  $outputs=@($Devices | Where-Object {$_.isSpdif -and $_.active -ne $false -and -not (Test-SetupVirtualOutput $_)})
   $preferred=@($outputs | Where-Object {$_.id -eq $SavedOutput}) | Select-Object -First 1
   if(-not $preferred){$preferred=@($outputs | Where-Object {$_.isSpdif -and $_.name -match '(?i)USB'}) | Select-Object -First 1}
   if(-not $preferred){$preferred=@($outputs | Where-Object {$_.isSpdif}) | Select-Object -First 1}
@@ -59,6 +61,13 @@ function Get-SetupSavedOutput {
   $path=Join-Path $script:SetupRoot 'bridge.conf'
   if(Test-Path -LiteralPath $path) {
     foreach($line in Get-Content -LiteralPath $path){if($line -match '^out_id=(.+)$'){return $Matches[1].Trim()}}
+  }
+  return ''
+}
+function Get-SetupSavedInput {
+  $path=Join-Path $script:SetupRoot 'bridge.conf'
+  if(Test-Path -LiteralPath $path) {
+    foreach($line in Get-Content -LiteralPath $path){if($line -match '^in_id=(.+)$'){return $Matches[1].Trim()}}
   }
   return ''
 }
@@ -122,7 +131,7 @@ function Save-SetupConfiguration([string]$InputId,[string]$OutputId,[bool]$Start
   $inputDevice=$devices | Where-Object {$_.id -eq $InputId -and (Test-SetupMultichannelInput $_)} | Select-Object -First 1
   $outputDevice=$devices | Where-Object {$_.id -eq $OutputId} | Select-Object -First 1
   if(-not $inputDevice){throw 'Install VB-CABLE, restart if requested, then refresh this window.'}
-  if(-not $outputDevice -or -not $outputDevice.isSpdif -or $InputId -eq $OutputId -or (Test-SetupVirtualOutput $outputDevice)) {
+  if(-not $outputDevice -or -not $outputDevice.isSpdif -or $outputDevice.active -eq $false -or $InputId -eq $OutputId -or (Test-SetupVirtualOutput $outputDevice)) {
     throw 'Select your physical optical output, rather than a virtual cable.'
   }
   $statePath=Join-Path $script:SetupRoot 'bridge-state.json'
@@ -130,15 +139,21 @@ function Save-SetupConfiguration([string]$InputId,[string]$OutputId,[bool]$Start
     Invoke-SetupBridge Stop | Out-Null
     if(Test-Path -LiteralPath $statePath){throw 'Previous audio settings could not be restored. Reconnect the previous output, then try again.'}
   }
-  Invoke-SetupControl @('--set-mix-51',$InputId) | Out-Null
-  $path=Join-Path $script:SetupRoot 'bridge.conf'
-  $pending=$path+'.new'
-  $text=@("in_id=$InputId","out_id=$OutputId",'bitrate=448000','safe=1536','loopback=1','upmix=off') -join [Environment]::NewLine
+  Invoke-SetupControl @('--visibility',$InputId,'1') | Out-Null
   try {
-    [IO.File]::WriteAllText($pending,$text+[Environment]::NewLine,(New-Object Text.UTF8Encoding($false)))
-    if(Test-Path -LiteralPath $path){[IO.File]::Replace($pending,$path,[NullString]::Value)}else{[IO.File]::Move($pending,$path)}
-  } finally {if(Test-Path -LiteralPath $pending){Remove-Item -LiteralPath $pending}}
-  Invoke-SetupBridge Start | Out-Null
+    Invoke-SetupControl @('--set-mix-51',$InputId) | Out-Null
+    $path=Join-Path $script:SetupRoot 'bridge.conf'
+    $pending=$path+'.new'
+    $text=@("in_id=$InputId","out_id=$OutputId",'bitrate=448000','safe=1536','loopback=1','upmix=off') -join [Environment]::NewLine
+    try {
+      [IO.File]::WriteAllText($pending,$text+[Environment]::NewLine,(New-Object Text.UTF8Encoding($false)))
+      if(Test-Path -LiteralPath $path){[IO.File]::Replace($pending,$path,[NullString]::Value)}else{[IO.File]::Move($pending,$path)}
+    } finally {if(Test-Path -LiteralPath $pending){Remove-Item -LiteralPath $pending}}
+    Invoke-SetupBridge Start | Out-Null
+  } catch {
+    try {Invoke-SetupControl @('--visibility',$InputId,'0') | Out-Null} catch {Write-Warning "Could not hide the virtual endpoint after setup failed: $_"}
+    throw
+  }
   if($Startup){Invoke-SetupBridge EnableStartup | Out-Null}else{Invoke-SetupBridge DisableStartup | Out-Null}
   Ensure-SetupDesktopShortcut
 }
@@ -208,7 +223,7 @@ function Show-SetupUi {
   function Refresh-SetupUi {
     $ui=$script:SetupUi
     try {
-      $selection=Get-SetupSelection (Get-SetupDevices) (Get-SetupSavedOutput)
+      $selection=Get-SetupSelection (Get-SetupDevices) (Get-SetupSavedOutput) (Get-SetupSavedInput)
       $hardware=Get-SetupHardware
       $ui.Input=$selection.Input;$ui.Outputs.Items.Clear()
       foreach($device in $selection.Outputs) {

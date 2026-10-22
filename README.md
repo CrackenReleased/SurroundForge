@@ -32,7 +32,7 @@ The private v0.1.10 migration MSI and v0.1.11 development MSI are unsigned local
 4. Select the virtual input and physical optical output, then **Save and start surround**. Enable startup if desired.
 5. Use 5.1/home-theater settings in games. Windows volume and mute control listening volume.
 
-Startup checks six assigned FL/FR/FC/LFE/BL/BR speakers at 48 kHz and repairs a missing speaker mask. **Stop SurroundForge** cancels supervision and restores the previous Windows output defaults. Closing the controller window keeps audio running; **Stop audio & close** stops it explicitly.
+Startup checks six assigned FL/FR/FC/LFE/BL/BR speakers at 48 kHz and repairs a missing speaker mask. The configured virtual playback endpoint appears in Windows Sound Output while audio runs and is hidden after Stop or a failed startup. The unused stereo **CABLE Input** endpoint stays hidden. **Stop SurroundForge** cancels supervision and restores the previous Windows output defaults. Closing the controller window with X stops audio; **Hide controller (audio continues)** in the tray menu leaves it running.
 
 The Sonic Anvil controller provides speaker calibration and Stereo/5.1/7.1 test layouts. The custom kernel endpoint and AC3 optical transport are 5.1; an eight-speaker calibration UI does not establish a native 7.1 optical transport.
 

@@ -22,6 +22,10 @@ $brandedDevices=@(
 $brandedSelection=Get-SetupSelection $brandedDevices ''
 Assert ($brandedSelection.Input.id -eq 'sf-virtual') 'Must recognize SurroundForge 5.1 branded virtual input'
 Assert ($brandedSelection.Outputs.Count -eq 1 -and $brandedSelection.Outputs[0].id -eq 'optical') 'Never offer SurroundForge virtual endpoint as physical optical output'
+$brandedDevices[0] | Add-Member NoteProperty active $false
+$brandedDevices[2] | Add-Member NoteProperty active $true
+Assert ((Get-SetupSelection $brandedDevices '').Input.id -eq 'sf-virtual') 'Setup must find its hidden configured input without exposing it in Windows'
+Assert ((Get-SetupSelection @($script:Devices + $brandedDevices) '' 'sf-virtual').Input.id -eq 'sf-virtual') 'Setup must prefer its saved input over an older cable endpoint'
 $sysDrive = if ($env:SystemDrive) { $env:SystemDrive } else { 'C:' }
 $sampleDir = Join-Path $sysDrive 'Sample'
 $otherDir = Join-Path $sysDrive 'Other'
@@ -39,8 +43,13 @@ New-Item -ItemType Directory -Path $script:SetupDesktopPath -Force | Out-Null
 $script:Calls=@();$script:FormatFails=$false;$script:StartFails=$false;$script:KeepState=$false
 function Get-SetupDevices {return $script:Devices}
 function Invoke-SetupControl([string[]]$Arguments) {
+  if($Arguments[0] -eq '--visibility') {
+    Assert ($Arguments[1] -eq 'virtual') 'Only the selected virtual input may change visibility'
+    $script:Calls+=if($Arguments[2] -eq '1'){'show'}else{'hide'}
+    return
+  }
   $script:Calls+='format'
-    Assert ($Arguments[0] -eq '--set-mix-51' -and $Arguments[1] -eq 'virtual') 'Only the selected multichannel input may change format'
+  Assert ($Arguments[0] -eq '--set-mix-51' -and $Arguments[1] -eq 'virtual') 'Only the selected multichannel input may change format'
   if($script:FormatFails){throw 'Format rejected'}
 }
 function Invoke-SetupBridge([string]$Action) {
@@ -76,7 +85,7 @@ try {
   Set-Content -LiteralPath $state -Value '{}'
   Set-Content -LiteralPath $config -Value 'old configuration'
   Save-SetupConfiguration 'virtual' 'optical' $true
-  Assert (($script:Calls -join ',') -eq 'Stop,format,Start,EnableStartup') 'Must stop before format/save/start and enable startup last'
+  Assert (($script:Calls -join ',') -eq 'Stop,show,format,Start,EnableStartup') 'Must stop before showing, formatting, starting and enabling startup'
   $text=[IO.File]::ReadAllText($config)
   foreach($line in 'in_id=virtual','out_id=optical','bitrate=448000','safe=1536','loopback=1','upmix=off') {Assert ($text.Contains($line)) "Missing configuration key: $line"}
   Assert (-not (Test-Path -LiteralPath ($config+'.new'))) 'Atomic configuration staging file must be cleaned'
@@ -98,14 +107,15 @@ try {
 
   $script:FormatFails=$true
   Expect-Failure {Save-SetupConfiguration 'virtual' 'optical' $false} 'Format rejected'
+  Assert (($script:Calls -join ',') -eq 'show,format,hide') 'Failed setup format must hide the virtual endpoint again'
   Assert ([IO.File]::ReadAllText($config) -eq $text) 'Failed format change must preserve config'
   $script:FormatFails=$false;$script:Calls=@();$script:StartFails=$true
   Expect-Failure {Save-SetupConfiguration 'virtual' 'optical' $true} 'Start rejected'
-  Assert (($script:Calls -join ',') -eq 'format,Start') 'Failed Start must not enable startup'
+  Assert (($script:Calls -join ',') -eq 'show,format,Start,hide') 'Failed Start must hide input and not enable startup'
 
   $script:StartFails=$false;$script:Calls=@()
   Save-SetupConfiguration 'virtual' 'optical' $false
-  Assert (($script:Calls -join ',') -eq 'format,Start,DisableStartup') 'Unchecked startup preference must be respected'
+  Assert (($script:Calls -join ',') -eq 'show,format,Start,DisableStartup') 'Unchecked startup preference must be respected'
   $script:KeepState=$true;$script:Calls=@();Set-Content -LiteralPath $state -Value '{}'
   Expect-Failure {Save-SetupConfiguration 'virtual' 'optical' $true} 'Previous audio settings'
   Assert (($script:Calls -join ',') -eq 'Stop') 'Unresolved rollback must block new format/config/start'

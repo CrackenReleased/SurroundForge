@@ -1,4 +1,4 @@
-<# SurroundForge controls v0.1.19-local. Closing this UI never stops audio. #>
+<# SurroundForge controls v0.1.20-local. X stops audio; Hide keeps it running. #>
 [CmdletBinding()]
 param([switch]$Show,[switch]$NoUi)
 $ErrorActionPreference='Stop'
@@ -201,6 +201,7 @@ function Update-TrayUi {
       Stop-SpeakerToneProcess
       $script:TrayExiting=$true;$script:TrayUi.Form.Close();[Windows.Forms.Application]::ExitThread();return
     }
+    if($script:CloseAfterOperation){$script:CloseAfterOperation=$false;Start-TrayAction Stop -ExitAfter;return}
     $script:TrayUi.Note.Text=if($exitCode -eq 0){$operation.Command+' audio complete.'}else{'Action failed: '+$errorMsg}
     foreach($item in $script:TrayUi.ActionControls){$item.Enabled=$true}
   }
@@ -600,9 +601,9 @@ function Show-TrayUi {
     $speakerButtons[$spk.Code]=$b
   }
 
-  $note=Add-TrayLabel $form 'Minimize or X to keep running in the tray, or click "Stop audio & close" to shut down.' 26 550 508 34 9
+  $note=Add-TrayLabel $form 'X or "Stop audio & close" shuts down audio. Minimize or Hide keeps it running.' 26 550 508 34 9
   $note.UseMnemonic=$false
-  $version=Add-TrayLabel $form 'Controls v0.1.19  |  Audio engine v0.1.15  |  Sonic Anvil Harmonic Calibration' 26 590 508 20 8
+  $version=Add-TrayLabel $form 'Controls v0.1.20  |  Audio engine v0.1.15  |  Sonic Anvil Harmonic Calibration' 26 590 508 20 8
   $version.ForeColor=[Drawing.Color]::DimGray
   $icon=New-Object Windows.Forms.NotifyIcon;$icon.Icon=$script:TrayIcons.Gray;$icon.Text='SurroundForge - Checking';$icon.Visible=$true
   $menu=New-Object Windows.Forms.ContextMenuStrip
@@ -638,7 +639,8 @@ function Show-TrayUi {
   $menuToggle.Add_Click({if($script:TrayRunning){Start-TrayAction Stop}else{Start-TrayAction Start}})
   $stopExit.Add_Click({Start-TrayAction Stop -ExitAfter});$menuStopExit.Add_Click({Start-TrayAction Stop -ExitAfter})
   $open.Add_Click({Show-TrayWindow});$icon.Add_Click({param($s,$e) if($e.Button -eq [Windows.Forms.MouseButtons]::Left){Show-TrayWindow}});$icon.Add_DoubleClick({Show-TrayWindow})
-  $form.Add_FormClosing({param($sender,$eventArgs) if(-not $script:TrayExiting){$eventArgs.Cancel=$true;$sender.Hide();$sender.ShowInTaskbar=$false}})
+  $form.Add_FormClosing({param($sender,$eventArgs) if(-not $script:TrayExiting){$eventArgs.Cancel=$true;$sender.Show();if($script:TrayOperation){$script:CloseAfterOperation=$true;$script:TrayUi.Note.Text='Finishing the current action before closing...'}else{Start-TrayAction Stop -ExitAfter}}})
+  $form.Add_Resize({if($form.WindowState -eq [Windows.Forms.FormWindowState]::Minimized){$form.Hide();$form.ShowInTaskbar=$false}})
   $exit.Add_Click({Stop-SpeakerToneProcess;$script:TrayExiting=$true;$form.Close();[Windows.Forms.Application]::ExitThread()})
   $timer=New-Object Windows.Forms.Timer;$timer.Interval=3000
   $timer.Add_Tick({try {Update-TrayUi} catch {$script:TrayUi.Status.Text='Needs attention';$script:TrayUi.Icon.Icon=$script:TrayIcons.Amber;$script:TrayUi.Note.Text='Status check failed. Restart audio if needed.'}})
