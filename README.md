@@ -2,7 +2,11 @@
 
 **Forge real PC surround sound through a USB optical adapter.**
 
-Source revision: **v0.1.16-local, migration revision 1**. The running audio engine remains **v0.1.15-local**; controls are v0.1.16 and MSI tooling remains v0.1.11. No signed public installer or native-driver release has been produced.
+## Windows installer
+
+**[Find the Windows installer on GitHub Releases](https://github.com/CrackenReleased/SurroundForge/releases).** No public MSI is available yet. The complete v0.1.21 development MSI is built and checked locally, but it is unsigned and is not a public download. A release will appear at that link after publisher signing and bundled driver redistribution are cleared. See [release requirements](docs/SIGNING.md).
+
+Source revision: **v0.1.21-local package**. The native engine is **v0.1.16-local**; controls are **v0.1.20-local**. No signed public installer or native-driver release has been produced.
 
 Canonical local checkout: `E:\SurroundForge`. Public source: [CrackenReleased/SurroundForge](https://github.com/CrackenReleased/SurroundForge). Commands below run from the repository root; other computers may clone into any directory.
 
@@ -24,7 +28,7 @@ The WDK is not installed on the current development machine, and no compiled `.s
 
 ## Install and use the verified route
 
-The private v0.1.10 migration MSI and v0.1.11 development MSI are unsigned local artifacts, excluded from Git. Public MSI creation requires verified publisher signing.
+The private v0.1.10 migration MSI and v0.1.21 development MSI are unsigned local artifacts, excluded from Git. Public MSI creation requires verified publisher signing and distributable vendor media.
 
 1. On Windows x64, open **SurroundForge Setup** from the existing installation or run `surround/Setup.ps1` from a checkout with built dependencies.
 2. Connect the adapter's optical OUT to the receiver's optical IN and select that input.
@@ -32,7 +36,7 @@ The private v0.1.10 migration MSI and v0.1.11 development MSI are unsigned local
 4. Select the virtual input and physical optical output, then **Save and start surround**. Enable startup if desired.
 5. Use 5.1/home-theater settings in games. Windows volume and mute control listening volume.
 
-Startup checks six assigned FL/FR/FC/LFE/BL/BR speakers at 48 kHz and repairs a missing speaker mask. **Stop SurroundForge** cancels supervision and restores the previous Windows output defaults. Closing the controller window keeps audio running; **Stop audio & close** stops it explicitly.
+Startup checks six assigned FL/FR/FC/LFE/BL/BR speakers at 48 kHz and repairs a missing speaker mask. The configured virtual playback endpoint appears in Windows Sound Output while audio runs and is hidden after Stop or a failed startup. The unused stereo **CABLE Input** endpoint stays hidden. **Stop SurroundForge** cancels supervision and restores the previous Windows output defaults. Closing the controller window with X stops audio; **Hide controller (audio continues)** in the tray menu leaves it running.
 
 The Sonic Anvil controller provides speaker calibration and Stereo/5.1/7.1 test layouts. The custom kernel endpoint and AC3 optical transport are 5.1; an eight-speaker calibration UI does not establish a native 7.1 optical transport.
 

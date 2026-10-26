@@ -199,6 +199,44 @@ static bool IsCableInput(std::wstring name)
          name.find(L"virtual ac3 encoder") == 0;
 }
 
+static int SetVirtualVisibility(const std::wstring& id, bool visible)
+{
+  ComPtr<IMMDevice> dev;
+  if (!DeviceEnum::GetById(id, dev)) {
+    std::fputs("ID must exactly match an installed render endpoint.\n", stderr);
+    return 2;
+  }
+  ComPtr<IMMEndpoint> endpoint;
+  EDataFlow flow = eAll;
+  if (FAILED(dev.As(&endpoint)) || FAILED(endpoint->GetDataFlow(&flow)) || flow != eRender) {
+    std::fputs("Visibility is restricted to render endpoints.\n", stderr);
+    return 2;
+  }
+  ComPtr<IPropertyStore> props;
+  PROPVARIANT name{};
+  const HRESULT nameHr = dev->OpenPropertyStore(STGM_READ, &props);
+  if (FAILED(nameHr) || FAILED(props->GetValue(PKEY_Device_FriendlyName, &name)))
+    return Failed("Read endpoint name", FAILED(nameHr) ? nameHr : E_FAIL);
+  const bool allowed = name.vt == VT_LPWSTR && IsCableInput(name.pwszVal);
+  PropVariantClear(&name);
+  if (!allowed) {
+    std::fputs("Visibility is restricted to a SurroundForge virtual input.\n", stderr);
+    return 2;
+  }
+  ComPtr<IPolicyConfig> policy;
+  HRESULT hr = CoCreateInstance(kPolicyClient, nullptr, CLSCTX_ALL, IID_PPV_ARGS(&policy));
+  if (FAILED(hr)) return Failed("PolicyConfig activation", hr);
+  hr = policy->SetEndpointVisibility(id.c_str(), visible ? 1 : 0);
+  if (FAILED(hr)) return Failed("SetEndpointVisibility", hr);
+  DWORD state = 0;
+  hr = dev->GetState(&state);
+  if (FAILED(hr)) return Failed("Verify endpoint visibility", hr);
+  if (visible ? (state != DEVICE_STATE_ACTIVE) : (state == DEVICE_STATE_ACTIVE))
+    return Failed("Endpoint visibility did not change", E_FAIL);
+  std::printf("visibility=%d\n", visible ? 1 : 0);
+  return 0;
+}
+
 static WAVEFORMATEXTENSIBLE Pcm51()
 {
   WAVEFORMATEXTENSIBLE format{};
@@ -512,16 +550,21 @@ int wmain(int argc, wchar_t** argv)
 {
   const std::wstring command = argc > 1 ? argv[1] : L"--help";
   if (command == L"--help") {
-    std::puts("bridge_control --devices-json | --defaults | --init-optical [RATE] | --format ID | --speaker-info ID | --sessions ID | --default ID ROLE(0/1/2) | --set-51 ID | --set-mix-51 ID | --play-wav ID PATH | --tone-speaker ID SPEAKER LAYOUT | --volume ID | --set-volume ID SCALAR MUTE(0/1) | --measure-loopback ID SECONDS(1..10)");
+    std::puts("bridge_control --devices-json | --devices-json-all | --defaults | --init-optical [RATE] | --format ID | --speaker-info ID | --sessions ID | --default ID ROLE(0/1/2) | --visibility ID 0/1 | --set-51 ID | --set-mix-51 ID | --play-wav ID PATH | --tone-speaker ID SPEAKER LAYOUT | --volume ID | --set-volume ID SCALAR MUTE(0/1) | --measure-loopback ID SECONDS(1..10)");
     return 0;
   }
   ComApartment apartment;
   if (!apartment.ok()) return Failed("COM initialization", apartment.hr);
-  if (command == L"--devices-json" && argc == 2) {
+  if ((command == L"--devices-json" || command == L"--devices-json-all") && argc == 2) {
     std::putchar('['); bool first = true;
-    for (const auto& endpoint : DeviceEnum::List(eRender)) {
-      std::printf("%s{\"id\":%s,\"name\":%s,\"isSpdif\":%s}", first ? "" : ",",
-                  JsonString(endpoint.id).c_str(), JsonString(endpoint.name).c_str(), endpoint.isSpdif ? "true" : "false");
+    const DWORD mask = command == L"--devices-json-all" ? DEVICE_STATE_ACTIVE | DEVICE_STATE_DISABLED : DEVICE_STATE_ACTIVE;
+    for (const auto& endpoint : DeviceEnum::List(eRender, mask)) {
+      ComPtr<IMMDevice> dev;
+      DWORD state = 0;
+      if (!DeviceEnum::GetById(endpoint.id, dev) || FAILED(dev->GetState(&state))) continue;
+      std::printf("%s{\"id\":%s,\"name\":%s,\"isSpdif\":%s,\"active\":%s}", first ? "" : ",",
+                  JsonString(endpoint.id).c_str(), JsonString(endpoint.name).c_str(), endpoint.isSpdif ? "true" : "false",
+                  state == DEVICE_STATE_ACTIVE ? "true" : "false");
       first = false;
     }
     std::puts("]"); return 0;
@@ -550,6 +593,13 @@ int wmain(int argc, wchar_t** argv)
     }
     std::fputs("No C-Media optical device found or failed to write S/PDIF register.\n", stderr);
     return 1;
+  }
+  if (command == L"--visibility") {
+    if (argc != 4 || (std::wstring(argv[3]) != L"0" && std::wstring(argv[3]) != L"1")) {
+      std::fputs("Invalid command or arguments. Run --help.\n", stderr);
+      return 2;
+    }
+    return SetVirtualVisibility(argv[2], argv[3][0] == L'1');
   }
   if ((command != L"--format" && command != L"--speaker-info" && command != L"--sessions" && command != L"--set-51" && command != L"--set-mix-51" && command != L"--default" && command != L"--play-wav" && command != L"--tone-speaker" && command != L"--volume" && command != L"--set-volume" && command != L"--measure-loopback") ||
       argc != (command == L"--set-volume" || command == L"--tone-speaker" ? 5 : command == L"--default" || command == L"--play-wav" || command == L"--measure-loopback" ? 4 : 3)) {

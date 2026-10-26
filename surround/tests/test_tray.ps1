@@ -32,10 +32,16 @@ $status=Get-TrayStatus (New-Snapshot) $null $now
 Assert ($status.Label -eq 'Running' -and $status.Rate -eq $null) 'Silent ready source is healthy while timing sample accumulates'
 Assert ((Get-TrayStatus (New-Snapshot $null $false $false) $null $now).Label -eq 'Stopped') 'Unsupervised stopped engine must say Stopped'
 Assert ((Get-TrayStatus (New-Snapshot $null $false $true) $null $now).Label -eq 'Recovering') 'Supervised stopped engine must say Recovering'
+$recovering=New-Snapshot $null $false $true
+$recovering | Add-Member NoteProperty Failure 'Optical device unavailable'
+Assert ((Get-TrayStatus $recovering $null $now).Detail -match 'Optical device unavailable') 'Recovering UI must explain the recorded device failure'
+$recovering.Failure='F' * 250
+Assert ((Get-TrayStatus $recovering $null $now).Detail.Length -le 145) 'A long recovery error must fit the controller detail area'
 Assert ((Get-TrayStatus (New-Snapshot (New-Health -Age 6)) $null $now).Label -eq 'Needs attention') 'Stale heartbeat must surface'
 Assert ((Get-TrayStatus (New-Snapshot (New-Health -ProcessId 99)) $null $now).Label -eq 'Starting') 'Wrong PID cannot certify current engine'
 $bad=New-Snapshot;$bad.Error='fixture read failed'
 Assert ((Get-TrayStatus $bad $null $now).Tone -eq 'Red') 'Snapshot read error must surface'
+Assert ((Get-TrayStatus $bad $null $now).Detail -match 'fixture read failed') 'Offline controller status must include its recorded read error'
 
 # Exercise production ownership and intent helpers, mocking only host operations.
 function Assert-BridgeRuntime {}
@@ -92,7 +98,56 @@ Assert ($traySource -match '\$script:TrayUi\.Icon\.Icon=\$script:TrayIcons\[\$st
 $bridgeSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\Bridge.ps1') -Raw
 Assert ($bridgeSource -match 'IconLocation=Join-Path \$env:LOCALAPPDATA ''SurroundForge\\surroundforge\.ico,0''') 'Startup shortcut must link to canonical surroundforge.ico'
 Assert ($traySource -match 'Stop audio & close') 'Tray controller must provide a Stop audio & close action to stop the engine and exit cleanly'
+Assert ($traySource -match 'Add_FormClosing\(\{[^\r\n]*Start-TrayAction Stop -ExitAfter') 'Closing the controller window must stop audio before exiting'
 Assert ($traySource -match 'EnsureDefaultDesktop' -and $traySource -match 'SurroundForge_Tray_Launch' -and $traySource -match 'Ensure-SurroundForgeHost') 'Tray controller must relaunch via SurroundForge.exe onto Default desktop with Sonic Anvil Win32 icon'
+Assert ((Get-TrayLaunchMode 'Default' 'powershell') -eq 'Direct') 'A normal desktop shortcut must launch the GUI host directly rather than through Task Scheduler'
+Assert ((Get-TrayLaunchMode 'Default' 'SurroundForge') -eq 'InProcess') 'The GUI host must not relaunch itself'
+Assert ((Get-TrayLaunchMode 'isolated-agent-desktop' 'powershell') -eq 'Scheduled') 'An isolated desktop must still reach the visible desktop'
+$hostCommand=Get-Command Ensure-SurroundForgeHost
+Assert ($hostCommand.Parameters.ContainsKey('ScriptPath') -and $hostCommand.Parameters.ContainsKey('AppDir')) 'Host builder must accept an isolated error fixture'
+$hostFixture=Join-Path $PSScriptRoot 'output\tray-host-errors'
+New-Item -ItemType Directory -Path $hostFixture -Force | Out-Null
+$fixtureScript=Join-Path $hostFixture 'failing-tray.ps1'
+Set-Content -LiteralPath $fixtureScript -Value 'if($env:SURROUNDFORGE_TEST_HOST_ERROR -eq "throw"){throw "fixture terminating failure"}; Write-Error "fixture nonterminating failure"'
+$fixtureHost=Ensure-SurroundForgeHost -ScriptPath $fixtureScript -AppDir $hostFixture
+$fixtureLog=Join-Path $hostFixture 'controller-launch.log'
+foreach($kind in 'error','throw') {
+  $env:SURROUNDFORGE_TEST_HOST_ERROR=$kind
+  $beforeLength=if(Test-Path -LiteralPath $fixtureLog){([IO.File]::ReadAllText($fixtureLog)).Length}else{0}
+  $child=Microsoft.PowerShell.Management\Start-Process -FilePath $fixtureHost -ArgumentList '-NoUi' -PassThru
+  try {
+    Assert ($child.WaitForExit(5000)) "Hosted $kind fixture must exit promptly"
+    Assert ($child.ExitCode -ne 0) "Hosted $kind fixture must return failure"
+    $newLog=([IO.File]::ReadAllText($fixtureLog)).Substring($beforeLength)
+    $expected=if($kind -eq 'error'){'fixture nonterminating failure'}else{'fixture terminating failure'}
+    Assert ($newLog.Contains($expected)) "Hosted $kind fixture must append its own failure to the error log"
+  } finally {if(-not $child.HasExited){Microsoft.PowerShell.Management\Stop-Process -Id $child.Id -ErrorAction SilentlyContinue};$child.Dispose()}
+}
+Remove-Item Env:\SURROUNDFORGE_TEST_HOST_ERROR -ErrorAction SilentlyContinue
+$successDir=Join-Path $PSScriptRoot 'output\tray-host-success'
+New-Item -ItemType Directory -Path $successDir -Force | Out-Null
+$successScript=Join-Path $successDir 'working-tray.ps1'
+Set-Content -LiteralPath $successScript -Value 'param([switch]$Show,[switch]$NoUi) Start-Sleep -Milliseconds 1200; "fixture controller ready"'
+$successHost=Ensure-SurroundForgeHost -ScriptPath $successScript -AppDir $successDir
+$successChild=Microsoft.PowerShell.Management\Start-Process -FilePath $successHost -ArgumentList '-NoUi' -PassThru
+try {
+  Assert (Test-ControllerHostRunning $successHost) 'A scheduled launch must be able to confirm its exact controller host stayed running'
+  Assert ($successChild.WaitForExit(5000)) 'Healthy hosted controller fixture must exit promptly'
+  Assert ($successChild.ExitCode -eq 0) 'Healthy hosted controller fixture must return success'
+  Assert (-not (Test-ControllerHostRunning $successHost)) 'Exited controller host must not count as a successful launch'
+  Assert (-not (Test-Path -LiteralPath (Join-Path $successDir 'controller-launch.log'))) 'Healthy hosted controller must not produce a launch error'
+} finally {if(-not $successChild.HasExited){Microsoft.PowerShell.Management\Stop-Process -Id $successChild.Id -ErrorAction SilentlyContinue};$successChild.Dispose()}
+$oldRoot=$root;$oldLocalAppData=$env:LOCALAPPDATA
+try {
+  $root=Join-Path $hostFixture 'missing-installation'
+  $env:LOCALAPPDATA=$hostFixture
+  Ensure-BridgeTray 3>$null
+  $missingLog=Join-Path $hostFixture 'SurroundForge\controller-launch.log'
+  Assert ((Get-Content -LiteralPath $missingLog -Raw).Contains('Controller script is missing')) 'A missing controller script must leave a durable launch error'
+} finally {$root=$oldRoot;$env:LOCALAPPDATA=$oldLocalAppData}
+$engineFailureLog=Join-Path $hostFixture 'engine-failure.log'
+Set-Content -LiteralPath $engineFailureLog -Value @('Started','Input ready','Output initialization failed: optical device unavailable')
+Assert ((Get-BridgeStartupFailureDetail $engineFailureLog) -match 'optical device unavailable') 'Startup failure details must retain the native engine cause before the next retry overwrites its log'
 $catalog = @(Get-SpeakerCatalog)
 Assert ($catalog.Count -eq 8) 'All 8 surround speakers (FL, FC, FR, SL, LFE, SR, BL, BR) must be viewable in catalog'
 Assert ((($catalog | Select-Object -ExpandProperty Code) -join ',') -eq 'FL,FC,FR,SL,LFE,SR,BL,BR') 'Speaker catalog must expose exact 8 speaker codes'
@@ -100,6 +155,12 @@ Assert ((($catalog | Select-Object -ExpandProperty Freq -Unique).Count) -eq 8) '
 Assert (((Get-SpeakerLayoutSequence 'stereo') -join ',') -eq 'FL,FR') 'Stereo layout sequence must test FL,FR'
 Assert (((Get-SpeakerLayoutSequence '5.1') -join ',') -eq 'FL,FC,FR,LFE,BL,BR') '5.1 layout sequence must test FL,FC,FR,LFE,BL,BR'
 Assert (((Get-SpeakerLayoutSequence '7.1') -join ',') -eq 'FL,FC,FR,LFE,SL,SR,BL,BR') '7.1 layout sequence must test all 8 speakers'
+$outputRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'output'))
+foreach($fixturePath in @($hostFixture,$successDir)) {
+  $resolved=[IO.Path]::GetFullPath($fixturePath)
+  Assert ($resolved.StartsWith($outputRoot+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) 'Fixture cleanup must stay inside tests/output'
+  Remove-Item -LiteralPath $resolved -Recurse -Force
+}
 Write-Output "PASS: tray status, Sonic Anvil taskbar icon host, 8-speaker interactive stage, Stereo/5.1/7.1 layout switcher, Stop & close, and mocked restart ($assertions assertions); no live audio changes."
 
 

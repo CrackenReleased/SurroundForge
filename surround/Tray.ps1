@@ -1,4 +1,4 @@
-<# SurroundForge controls v0.1.16. Closing this UI never stops audio. #>
+<# SurroundForge controls v0.1.20-local. X stops audio; Hide keeps it running. #>
 [CmdletBinding()]
 param([switch]$Show,[switch]$NoUi)
 $ErrorActionPreference='Stop'
@@ -25,11 +25,18 @@ function Get-SpeakerLayoutSequence([ValidateSet('stereo','5.1','7.1')][string]$L
   }
 }
 
+function Limit-TrayDetail([string]$Detail) {
+  if($Detail.Length -gt 140){return $Detail.Substring(0,137)+'...'}
+  return $Detail
+}
 function Get-TrayStatus($Snapshot,$Previous,[datetime]$Now=[datetime]::UtcNow) {
   $result=[pscustomobject]@{Label='Stopped';Tone='Gray';Detail='Choose Start audio to enable surround.';Rate=$null}
-  if($Snapshot.Error){$result.Label='Off';$result.Tone='Red';$result.Detail='Audio service is offline or unreachable. Try Restart audio.';return $result}
+  if($Snapshot.Error){$result.Label='Off';$result.Tone='Red';$result.Detail=Limit-TrayDetail ('Audio status error: '+$Snapshot.Error);return $result}
   if(-not $Snapshot.Running) {
-    if($Snapshot.Supervised){$result.Label='Recovering';$result.Tone='Amber';$result.Detail='Automatic recovery is retrying. Check the USB connection.'}
+    if($Snapshot.Supervised){
+      $result.Label='Recovering';$result.Tone='Amber'
+      $result.Detail=if($Snapshot.Failure){Limit-TrayDetail ('Automatic recovery: '+$Snapshot.Failure)}else{'Automatic recovery is retrying. Check the USB connection.'}
+    }
     return $result
   }
   $health=$Snapshot.Health
@@ -194,6 +201,7 @@ function Update-TrayUi {
       Stop-SpeakerToneProcess
       $script:TrayExiting=$true;$script:TrayUi.Form.Close();[Windows.Forms.Application]::ExitThread();return
     }
+    if($script:CloseAfterOperation){$script:CloseAfterOperation=$false;Start-TrayAction Stop -ExitAfter;return}
     $script:TrayUi.Note.Text=if($exitCode -eq 0){$operation.Command+' audio complete.'}else{'Action failed: '+$errorMsg}
     foreach($item in $script:TrayUi.ActionControls){$item.Enabled=$true}
   }
@@ -371,21 +379,29 @@ public static class SurroundForgeTrayIcon {
 '@
 }
 
-function Ensure-SurroundForgeHost {
+function Test-ControllerHostRunning([string]$Executable) {
+  foreach($candidate in @(Microsoft.PowerShell.Management\Get-Process -Name SurroundForge -ErrorAction SilentlyContinue)) {
+    try {if($candidate.Path -eq $Executable){return $true}} catch {}
+  }
+  return $false
+}
+
+function Ensure-SurroundForgeHost([string]$ScriptPath=(Join-Path $PSScriptRoot 'Tray.ps1'),[string]$AppDir=(Join-Path $env:LOCALAPPDATA 'SurroundForge')) {
   Register-TrayNativeTypes
-  $appDir=Join-Path $env:LOCALAPPDATA 'SurroundForge'
   if(-not (Test-Path -LiteralPath $appDir)){New-Item -ItemType Directory -Path $appDir -Force | Out-Null}
   $icoPath=Join-Path $appDir 'surroundforge.ico'
   $exePath=Join-Path $appDir 'SurroundForge.exe'
   try {[SurroundForgeTrayIcon]::WriteSonicAnvilIco($icoPath)} catch {}
   $smaPath=[psobject].Assembly.Location
-  $escapedScript=$PSCommandPath.Replace('\','\\').Replace('"','\"')
+  $escapedScript=$ScriptPath.Replace('\','\\').Replace('"','\"')
+  $escapedAppDir=$AppDir.Replace('\','\\').Replace('"','\"')
   $source=@"
 using System;
 using System.IO;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
 using System.Runtime.InteropServices;
+using System.Text;
 
 [assembly: System.Reflection.AssemblyTitle("SurroundForge Audio Controller")]
 [assembly: System.Reflection.AssemblyProduct("SurroundForge")]
@@ -395,33 +411,63 @@ using System.Runtime.InteropServices;
 public static class SurroundForgeHost {
   [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
   static extern int SetCurrentProcessExplicitAppUserModelID(string AppID);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+  static extern int MessageBoxW(IntPtr window, string text, string caption, uint type);
+
+  static int ReportFailure(string message, string appDir, bool show) {
+    string logPath = Path.Combine(appDir, "controller-launch.log");
+    try {
+      Directory.CreateDirectory(appDir);
+      string entry = DateTime.Now.ToString("o") + " " + message + Environment.NewLine;
+      if (File.Exists(logPath) && new FileInfo(logPath).Length >= 65536) File.WriteAllText(logPath, entry);
+      else File.AppendAllText(logPath, entry);
+    } catch (Exception logError) {
+      message += Environment.NewLine + "Could not write " + logPath + ": " + logError.Message;
+    }
+    if (show) MessageBoxW(IntPtr.Zero, "SurroundForge could not open its controller. Audio recovery continues separately." + Environment.NewLine + (message.Length > 500 ? message.Substring(0, 500) + "..." : message) + Environment.NewLine + "Details: " + logPath, "SurroundForge launch error", 0x10);
+    return 1;
+  }
 
   [STAThread]
   public static int Main(string[] args) {
     try { SetCurrentProcessExplicitAppUserModelID("CrackenReleased.SurroundForge.Controller"); } catch {}
     string scriptPath = "$escapedScript";
+    string appDir = "$escapedAppDir";
     bool show = false;
     bool noUi = false;
     foreach (string a in args) {
       if (string.Equals(a, "-Show", StringComparison.OrdinalIgnoreCase)) show = true;
       if (string.Equals(a, "-NoUi", StringComparison.OrdinalIgnoreCase)) noUi = true;
     }
-    using (Runspace rs = RunspaceFactory.CreateRunspace()) {
-      rs.ApartmentState = System.Threading.ApartmentState.STA;
-      rs.ThreadOptions = PSThreadOptions.UseCurrentThread;
-      rs.Open();
-      using (PowerShell ps = PowerShell.Create()) {
-        ps.Runspace = rs;
-        string cmd = "Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force; & '" + scriptPath.Replace("'", "''") + "'" + (show ? " -Show" : "") + (noUi ? " -NoUi" : "");
-        ps.AddScript(cmd);
-        ps.Invoke();
+    try {
+      using (Runspace rs = RunspaceFactory.CreateRunspace()) {
+        rs.ApartmentState = System.Threading.ApartmentState.STA;
+        rs.ThreadOptions = PSThreadOptions.UseCurrentThread;
+        rs.Open();
+        using (PowerShell ps = PowerShell.Create()) {
+          ps.Runspace = rs;
+          string cmd = "Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force; & '" + scriptPath.Replace("'", "''") + "'" + (show ? " -Show" : "") + (noUi ? " -NoUi" : "");
+          ps.AddScript(cmd);
+          ps.Invoke();
+          if (ps.HadErrors) {
+            StringBuilder errors = new StringBuilder("Controller script failed:");
+            foreach (ErrorRecord error in ps.Streams.Error) errors.Append(Environment.NewLine).Append(error.ToString()).Append(" ").Append(error.ScriptStackTrace);
+            return ReportFailure(errors.ToString(), appDir, show);
+          }
+        }
       }
+    } catch (Exception error) {
+      return ReportFailure(error.ToString(), appDir, show);
     }
     return 0;
   }
 }
 "@
-  if(-not (Test-Path -LiteralPath $exePath)) {
+  $sourceChanged=(Test-Path -LiteralPath $exePath) -and ((Get-Item -LiteralPath $exePath).LastWriteTimeUtc -lt (Get-Item -LiteralPath (Join-Path $PSScriptRoot 'Tray.ps1')).LastWriteTimeUtc)
+  $needsBuild=(-not (Test-Path -LiteralPath $exePath)) -or $sourceChanged -or ((Test-Path -LiteralPath $exePath) -and (Get-Item -LiteralPath $exePath).LastWriteTimeUtc -lt (Get-Item -LiteralPath $ScriptPath).LastWriteTimeUtc)
+  if($needsBuild) {
+    # A live host owns the executable. It will read this script on launch; rebuild after it closes.
+    if(Test-ControllerHostRunning $exePath){return $exePath}
     $provider=New-Object Microsoft.CSharp.CSharpCodeProvider
     $cp=New-Object System.CodeDom.Compiler.CompilerParameters
     $cp.GenerateExecutable=$true
@@ -439,18 +485,40 @@ public static class SurroundForgeHost {
   return $exePath
 }
 
+function Get-TrayLaunchMode([string]$Desktop,[string]$ProcessName) {
+  if($Desktop -ne 'Default'){return 'Scheduled'}
+  if($ProcessName -ne 'SurroundForge'){return 'Direct'}
+  return 'InProcess'
+}
+
 function EnsureDefaultDesktop {
   Register-TrayNativeTypes
   $desk=[SurroundForgeTrayIcon]::GetCurrentDesktopName()
   $procName=[Diagnostics.Process]::GetCurrentProcess().ProcessName
-  if($desk -ne 'Default' -or $procName -ne 'SurroundForge') {
+  $mode=Get-TrayLaunchMode $desk $procName
+  if($mode -ne 'InProcess') {
     $exePath=Ensure-SurroundForgeHost
     $argStr=if($Show){' -Show'}else{''}
+    if($mode -eq 'Direct') {
+      $hostProcess=Start-Process -FilePath $exePath -ArgumentList $argStr -WorkingDirectory (Split-Path $exePath) -PassThru
+      Start-Sleep -Milliseconds 350
+      $hostProcess.Refresh()
+      if($hostProcess.HasExited -and $hostProcess.ExitCode -ne 0){throw "Controller host exited with code $($hostProcess.ExitCode). See $(Join-Path $env:LOCALAPPDATA 'SurroundForge\controller-launch.log')."}
+      return $true
+    }
     $tr='"'+$exePath+'"'+$argStr
     $prev=$ErrorActionPreference;$ErrorActionPreference='Continue'
     try {
-      & schtasks.exe /Create /TN 'SurroundForge_Tray_Launch' /TR $tr /SC ONCE /ST 23:59 /IT /F *>$null
-      & schtasks.exe /Run /TN 'SurroundForge_Tray_Launch' *>$null
+      $result=(& schtasks.exe /Create /TN 'SurroundForge_Tray_Launch' /TR $tr /SC ONCE /ST 23:59 /IT /F 2>&1 | Out-String).Trim()
+      if($LASTEXITCODE -ne 0){throw "Controller desktop task creation failed ($LASTEXITCODE): $result"}
+      $result=(& schtasks.exe /Run /TN 'SurroundForge_Tray_Launch' 2>&1 | Out-String).Trim()
+      if($LASTEXITCODE -ne 0){throw "Controller desktop task launch failed ($LASTEXITCODE): $result"}
+      $appeared=$false
+      for($attempt=0;$attempt -lt 20;$attempt++) {
+        if(Test-ControllerHostRunning $exePath){$appeared=$true;break}
+        Start-Sleep -Milliseconds 250
+      }
+      if(-not $appeared){throw "Controller desktop task reported success but no host stayed running. See $(Join-Path $env:LOCALAPPDATA 'SurroundForge\controller-launch.log')."}
     } finally {$ErrorActionPreference=$prev}
     return $true
   }
@@ -533,9 +601,9 @@ function Show-TrayUi {
     $speakerButtons[$spk.Code]=$b
   }
 
-  $note=Add-TrayLabel $form 'Minimize or X to keep running in the tray, or click "Stop audio & close" to shut down.' 26 550 508 34 9
+  $note=Add-TrayLabel $form 'X or "Stop audio & close" shuts down audio. Minimize or Hide keeps it running.' 26 550 508 34 9
   $note.UseMnemonic=$false
-  $version=Add-TrayLabel $form 'Controls v0.1.16  |  Audio engine v0.1.15  |  Sonic Anvil Harmonic Calibration' 26 590 508 20 8
+  $version=Add-TrayLabel $form 'Controls v0.1.20  |  Audio engine v0.1.15  |  Sonic Anvil Harmonic Calibration' 26 590 508 20 8
   $version.ForeColor=[Drawing.Color]::DimGray
   $icon=New-Object Windows.Forms.NotifyIcon;$icon.Icon=$script:TrayIcons.Gray;$icon.Text='SurroundForge - Checking';$icon.Visible=$true
   $menu=New-Object Windows.Forms.ContextMenuStrip
@@ -571,7 +639,8 @@ function Show-TrayUi {
   $menuToggle.Add_Click({if($script:TrayRunning){Start-TrayAction Stop}else{Start-TrayAction Start}})
   $stopExit.Add_Click({Start-TrayAction Stop -ExitAfter});$menuStopExit.Add_Click({Start-TrayAction Stop -ExitAfter})
   $open.Add_Click({Show-TrayWindow});$icon.Add_Click({param($s,$e) if($e.Button -eq [Windows.Forms.MouseButtons]::Left){Show-TrayWindow}});$icon.Add_DoubleClick({Show-TrayWindow})
-  $form.Add_FormClosing({param($sender,$eventArgs) if(-not $script:TrayExiting){$eventArgs.Cancel=$true;$sender.Hide();$sender.ShowInTaskbar=$false}})
+  $form.Add_FormClosing({param($sender,$eventArgs) if(-not $script:TrayExiting){$eventArgs.Cancel=$true;$sender.Show();if($script:TrayOperation){$script:CloseAfterOperation=$true;$script:TrayUi.Note.Text='Finishing the current action before closing...'}else{Start-TrayAction Stop -ExitAfter}}})
+  $form.Add_Resize({if($form.WindowState -eq [Windows.Forms.FormWindowState]::Minimized){$form.Hide();$form.ShowInTaskbar=$false}})
   $exit.Add_Click({Stop-SpeakerToneProcess;$script:TrayExiting=$true;$form.Close();[Windows.Forms.Application]::ExitThread()})
   $timer=New-Object Windows.Forms.Timer;$timer.Interval=3000
   $timer.Add_Tick({try {Update-TrayUi} catch {$script:TrayUi.Status.Text='Needs attention';$script:TrayUi.Icon.Icon=$script:TrayIcons.Amber;$script:TrayUi.Note.Text='Status check failed. Restart audio if needed.'}})
@@ -583,15 +652,31 @@ function Show-TrayUi {
 }
 
 if($NoUi){return}
-if(EnsureDefaultDesktop){exit}
-$trayMutex=New-BridgeMutex 'tray-v3'
-$script:TrayShowEvent=New-Object Threading.EventWaitHandle($false,[Threading.EventResetMode]::AutoReset,(Get-BridgeObjectName 'tray-show-v3'))
-$ownsMutex=Enter-BridgeMutex $trayMutex 0
-if(-not $ownsMutex) {
-  [void]$script:TrayShowEvent.Set()
-  Start-Sleep -Milliseconds 450
-  if(-not $script:TrayShowEvent.WaitOne(0)) {
-    $script:TrayShowEvent.Dispose();$trayMutex.Dispose();exit
+try {
+  if(EnsureDefaultDesktop){exit}
+  $trayMutex=New-BridgeMutex 'tray-v3'
+  $script:TrayShowEvent=New-Object Threading.EventWaitHandle($false,[Threading.EventResetMode]::AutoReset,(Get-BridgeObjectName 'tray-show-v3'))
+  $ownsMutex=Enter-BridgeMutex $trayMutex 0
+  if(-not $ownsMutex) {
+    [void]$script:TrayShowEvent.Set()
+    Start-Sleep -Milliseconds 450
+    if(-not $script:TrayShowEvent.WaitOne(0)) {
+      $script:TrayShowEvent.Dispose();$trayMutex.Dispose();exit
+    }
   }
+  try {Show-TrayUi} finally {$script:TrayShowEvent.Dispose();if($ownsMutex){try{$trayMutex.ReleaseMutex()}catch{}};$trayMutex.Dispose()}
+} catch {
+  if([Diagnostics.Process]::GetCurrentProcess().ProcessName -ne 'SurroundForge') {
+    $launchError=$_
+    Write-ControllerLaunchFailure "Controller launch failed: $launchError"
+    if($Show) {
+      try {
+        Register-TrayNativeTypes
+        if([SurroundForgeTrayIcon]::GetCurrentDesktopName() -eq 'Default') {
+          [void][Windows.Forms.MessageBox]::Show("SurroundForge could not open its controller. Audio recovery continues separately.`r`n$($launchError.Exception.Message)`r`nDetails: $(Join-Path $env:LOCALAPPDATA 'SurroundForge\controller-launch.log')",'SurroundForge launch error','OK','Error')
+        }
+      } catch {}
+    }
+  }
+  throw
 }
-try {Show-TrayUi} finally {$script:TrayShowEvent.Dispose();if($ownsMutex){try{$trayMutex.ReleaseMutex()}catch{}};$trayMutex.Dispose()}

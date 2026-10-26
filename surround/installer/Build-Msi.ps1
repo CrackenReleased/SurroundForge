@@ -98,7 +98,7 @@ $removeXml=($directories.Values | ForEach-Object {'<RemoveFolder Id="Remove_'+$_
 $source=@'
 <?xml version="1.0" encoding="utf-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-<Product Id="*" Name="SurroundForge" Language="1033" Version="0.1.11" Manufacturer="Cracken Released, LLC" UpgradeCode="5F84BC04-1D71-4E51-83D3-2832FCCF20F2">
+<Product Id="*" Name="SurroundForge" Language="1033" Version="0.1.21" Manufacturer="Cracken Released, LLC" UpgradeCode="5F84BC04-1D71-4E51-83D3-2832FCCF20F2">
 <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser" Platform="x64" Description="Real-time optical 5.1 audio with Windows volume and mute" />
 <MajorUpgrade DowngradeErrorMessage="A newer version of SurroundForge is already installed." />
 <MediaTemplate EmbedCab="yes" CompressionLevel="medium" />
@@ -131,14 +131,14 @@ $wxs=Join-Path $work 'SurroundForge.wxs'
 [IO.File]::WriteAllText($wxs,$source)
 & (Join-Path $wix 'candle.exe') -nologo -arch x64 -out (Join-Path $work 'SurroundForge.wixobj') $wxs
 if($LASTEXITCODE){throw 'MSI compilation failed.'}
-$msi=Join-Path $work 'SurroundForge-0.1.11-x64.msi'
+$msi=Join-Path $work 'SurroundForge-0.1.21-x64.msi'
 # ICE91 warns about per-machine use of user-profile files. This MSI is explicitly
 # per-user and Test-Msi asserts ALLUSERS absent; keep all other ICE validations.
 & (Join-Path $wix 'light.exe') -nologo -sice:ICE91 -ext (Join-Path $wix 'WixUIExtension.dll') -out $msi (Join-Path $work 'SurroundForge.wixobj')
 if($LASTEXITCODE){throw 'MSI linking/validation failed.'}
 if($policy){$signatureRecords+=Invoke-ReleaseSigning -Path $msi -Policy $policy}
 # A signing failure leaves only a private build artifact, never a release MSI.
-$outputName=if($DevelopmentUnsigned){'SurroundForge-0.1.11-x64-UNSIGNED-DEVELOPMENT.msi'}else{'SurroundForge-0.1.11-x64.msi'}
+$outputName=if($DevelopmentUnsigned){'SurroundForge-0.1.21-x64-UNSIGNED-DEVELOPMENT.msi'}else{'SurroundForge-0.1.21-x64.msi'}
 $published=Join-Path $dist $outputName
 if((Test-Path -LiteralPath $published) -and -not $DevelopmentUnsigned){throw "Refusing to overwrite an existing release artifact: $published"}
 $pending=$published+'.pending'

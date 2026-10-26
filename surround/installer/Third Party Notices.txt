@@ -1,4 +1,4 @@
-SurroundForge v0.1.11
+SurroundForge v0.1.21
 
 Native engine adapted from strepto42/virtual-ac3-encoder, upstream v0.1.5 commit 3be5ba878f9689b0257c03ff4759d19cdf552cb5. MIT license included in Licenses/Engine-MIT.txt. Source and local modifications are retained in this project's surround/source/engine tree.
 https://github.com/strepto42/virtual-ac3-encoder

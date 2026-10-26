@@ -1,6 +1,6 @@
-# Release signing and public distribution — v0.1.11
+# Release signing and public distribution — v0.1.21-local package
 
-Status: signing enforcement is implemented; **no public signing identity or signed public release exists yet**. The verified live audio engine is unchanged. The old v0.1.10 MSI remains a private, unsigned migration artifact. The v0.1.11 development MSI is also unsigned and explicitly labeled.
+Status: signing enforcement is implemented; **no public signing identity or signed public release exists yet**. The old v0.1.10 MSI remains a private, unsigned migration artifact. The current v0.1.21 development MSI is also unsigned and explicitly labeled.
 
 ## Free options and their limits
 

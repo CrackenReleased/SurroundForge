@@ -31,8 +31,11 @@ expect(0, "--tone-speaker ID SPEAKER LAYOUT", "--help")
 
 # Offline tests inspect the HID command without initializing real optical hardware.
 expect(0, "--init-optical", "--help")
+expect(0, "[", "--devices-json-all")
 
 expect(2, "Invalid command", "--unknown")
+expect(2, "Invalid command", "--visibility", "not-an-endpoint", "9")
+expect(2, "exactly match", "--visibility", "not-an-endpoint", "0")
 expect(2, "exactly match", "--format", "not-an-endpoint")
 optical_active = False
 cable_active = False
@@ -45,6 +48,7 @@ except Exception:
     pass
 
 if optical_active:
+    expect(2, "restricted", "--visibility", OPTICAL, "0")
     expect(2, "ROLE must be exactly", "--default", OPTICAL, "99")
     expect(2, "restricted to", "--set-51", OPTICAL)
     expect(2, "restricted to", "--set-mix-51", OPTICAL)

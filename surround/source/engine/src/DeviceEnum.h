@@ -19,7 +19,7 @@ struct EndpointInfo
 namespace DeviceEnum
 {
 // flow = eRender (outputs) or eCapture (recording).
-std::vector<EndpointInfo> List(EDataFlow flow);
+std::vector<EndpointInfo> List(EDataFlow flow, DWORD states = DEVICE_STATE_ACTIVE);
 
 // Resolve an IMMDevice by its endpoint id.
 bool GetById(const std::wstring& id, ComPtr<IMMDevice>& out);

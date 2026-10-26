@@ -1,3 +1,27 @@
+## v0.1.21-local — 2026-10-26 — Complete development MSI and GitHub release entry point
+
+- Rebuild the full Windows suite from current v0.1.16 native engine and v0.1.20 controls into a v0.1.21 development MSI. Validate MSI identity, included scripts and executables, dependencies, complete original vendor media and destination-independent configuration.
+- Put a prominent Windows installer link at the top of the README, with the current public-release status stated beside it. Publisher signing and C-Media redistribution remain release gates; the unsigned development MSI stays outside GitHub and `dist`.
+
+## v0.1.20-local — 2026-10-22 — Sound output availability follows the audio engine
+
+- Hide the unused `CABLE Input (VB-Audio Virtual Cable)` playback endpoint by exact ID, while leaving its shared VB-Audio driver and the configured six-channel endpoint intact.
+- Show the configured SurroundForge endpoint before audio starts; restore Windows defaults and hide it when audio stops or startup fails. The communications playback role no longer remains on a stopped virtual endpoint.
+- Treat the controller window's X as **Stop audio & close**. The explicit **Hide controller (audio continues)** action keeps audio running. Setup can discover a hidden configured endpoint and shows it only while configuring or running audio.
+- Add native visibility guards and regression coverage for lifecycle, setup, and controller close behavior. The current host's optical endpoint could not initialize during live startup verification; failed startup left both virtual outputs hidden and Realtek selected.
+
+## v0.1.19-local — 2026-10-21 — Controller and startup error reporting
+
+- The GUI host now returns a failure code, writes a bounded user-local `controller-launch.log`, and shows a launch error dialog when its PowerShell controller fails. Updated controller source rebuilds the generated host on the next launch.
+- Desktop handoff and missing-controller failures are logged instead of silently treated as success. When the encoder exits during startup, the supervisor retains a short native error excerpt before the next retry replaces the engine log.
+- The controller shows recorded recovery and status-read errors. Fixture tests cover successful hosting, terminating and nonterminating host errors, missing controller files, and recovery detail.
+
+## v0.1.18-local — 2026-10-21 — Restore desktop and sign-in controller launch
+
+- Launch the controller host directly when `Tray.ps1` already runs on the visible Windows desktop. The previous path sent every launch through a scheduled task, which completed without leaving the controller window running on this PC.
+- Keep the scheduled desktop handoff for isolated agent desktops. Audio routing and the running encoder are unchanged.
+- Add a regression test for direct desktop launch selection and verify both the desktop and sign-in shortcuts open the controller window.
+
 ## v0.1.17-local — 2026-10-21 — Dynamic 4-color status emblem, desktop restart shortcut, and MSI installer shortcut delivery
 
 - **Dynamic 4-Color Status Palette**: Configured the Sonic Anvil emblem, GUI window icon, and system tray icon in `surround/Tray.ps1` to reactively reflect engine health state: Teal (`#00E4C4`) for Running/Good, Orange (`#FAA00A`) for Issues (Recovering/Starting/Needs attention), Gray (`#8291A5`) for Stopped (manual pause), and Red (`#F8414B`) for Off (offline/snapshot error).
