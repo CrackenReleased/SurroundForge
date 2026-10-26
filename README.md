@@ -4,7 +4,7 @@
 
 ## Windows installer
 
-**[Find the Windows installer on GitHub Releases](https://github.com/CrackenReleased/SurroundForge/releases).** No public MSI is available yet. The complete v0.1.21 development MSI is built and checked locally, but it is unsigned and is not a public download. A release will appear at that link after publisher signing and bundled driver redistribution are cleared. See [release requirements](docs/SIGNING.md).
+**There is no public MSI download.** The complete v0.1.21 installer is a private local-test package for the maintainer's computers; it is not stored on GitHub. To install it on another personal PC, copy that MSI from the maintainer's Desktop. This repository provides the [MSI build and verification instructions](docs/BUILD.md#msi) and [release requirements](docs/SIGNING.md).
 
 Source revision: **v0.1.21-local package**. The native engine is **v0.1.16-local**; controls are **v0.1.20-local**. No signed public installer or native-driver release has been produced.
 
@@ -28,7 +28,7 @@ The WDK is not installed on the current development machine, and no compiled `.s
 
 ## Install and use the verified route
 
-The private v0.1.10 migration MSI and v0.1.21 development MSI are unsigned local artifacts, excluded from Git. Public MSI creation requires verified publisher signing and distributable vendor media.
+The private v0.1.10 migration MSI, v0.1.21 development MSI, and v0.1.21 self-signed local-test MSI are local artifacts, excluded from Git. Public MSI creation requires verified publisher signing and distributable vendor media.
 
 1. On Windows x64, open **SurroundForge Setup** from the existing installation or run `surround/Setup.ps1` from a checkout with built dependencies.
 2. Connect the adapter's optical OUT to the receiver's optical IN and select that input.

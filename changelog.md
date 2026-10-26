@@ -1,7 +1,8 @@
-## v0.1.21-local — 2026-10-26 — Complete development MSI and GitHub release entry point
+## v0.1.21-local — 2026-10-26 — Complete development MSI and installer documentation
 
+- Correct the README's installer section: the Releases page is empty, so it now links to the actual MSI build instructions and explains the private local-test package location without presenting a nonexistent public download.
 - Rebuild the full Windows suite from current v0.1.16 native engine and v0.1.20 controls into a v0.1.21 development MSI. Validate MSI identity, included scripts and executables, dependencies, complete original vendor media and destination-independent configuration.
-- Put a prominent Windows installer link at the top of the README, with the current public-release status stated beside it. Publisher signing and C-Media redistribution remain release gates; the unsigned development MSI stays outside GitHub and `dist`.
+- Put installer status at the top of the README. The private development MSI stays outside GitHub and `dist`; publisher signing and vendor redistribution remain public-release gates.
 
 ## v0.1.20-local — 2026-10-22 — Sound output availability follows the audio engine
 
