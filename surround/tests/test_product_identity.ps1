@@ -12,6 +12,12 @@ foreach($file in $files){
   $text=Get-Content -LiteralPath (Join-Path $project $file) -Raw
   Assert ($text -notmatch '(?i)Samsung|HT-D550|\bD\.IN\b') "Receiver-specific identity remains in $file"
 }
+$readme=Get-Content -LiteralPath (Join-Path $project 'README.md') -Raw
+Assert ($readme -match 'Download the full-suite Windows MSI.*https://drive\.google\.com/file/d/1-atIP07hW2EeIfbp-tnkINMV22WeaiP-/view') 'README must link directly to the hosted MSI'
+Assert ($readme -match 'SHA-256 checksum.*https://drive\.google\.com/file/d/1qh4olks95rOPkdTtZjd6DDoEdoMRbut7/view') 'README must link to the matching checksum file'
+Assert ($readme -match 'C2DF8EE257D375CEC8802206855450F5CE47061AB37F94EF32F8511ECE7F4CC6') 'README must state the verified MSI checksum'
+Assert ($readme -match 'local test certificate' -and $readme -match 'not.*trusted Cracken Released publisher identity') 'README must disclose the test-signing limitation'
+Assert ($readme -notmatch 'github\.com/CrackenReleased/SurroundForge/releases') 'README must not route installer downloads to the empty Releases page'
 $build=Get-Content -LiteralPath (Join-Path $project 'surround\installer\Build-Msi.ps1') -Raw
 Assert ($build -match 'Name="SurroundForge"') 'MSI product must be SurroundForge'
 Assert ($build -match 'Version="0\.1\.21"') 'MSI version must be 0.1.21'
@@ -40,5 +46,5 @@ $fixture={
   Assert ($failure -match 'WDK.*not installed|Windows Driver Kit.*not installed') 'Missing WDK must fail the build, not return successfully'
 }
 & $fixture
-Write-Output "PASS: neutral product identity across $($files.Count) files; stable MSI upgrade identity; kernel driver 5.1 & Cracken Released, LLC authority metadata verified"
+Write-Output "PASS: neutral product identity across $($files.Count) files; direct MSI/checksum links and test-signing disclosure; stable MSI upgrade identity; kernel driver 5.1 & Cracken Released, LLC authority metadata verified"
 

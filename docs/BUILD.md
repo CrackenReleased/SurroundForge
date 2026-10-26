@@ -1,6 +1,6 @@
 # Build and verify SurroundForge — v0.1.21-local package
 
-The native engine is v0.1.16-local and controls are v0.1.20-local. The latest complete development MSI is v0.1.21; it includes current source, native runtime, dependencies and original vendor media. It is unsigned and private. [Signing setup and free distribution options](SIGNING.md) describe the outstanding identity/vendor requirements. Public MSI creation requires verified company signing and distributable vendor media; examples below explicitly build development packages.
+The native engine is v0.1.16-local and controls are v0.1.20-local. The latest complete development MSI is v0.1.21; it includes current source, native runtime, dependencies and original vendor media. The reproducible development build is unsigned; a [self-signed test copy](../README.md#windows-installer) is available in the maintainer's Drive folder. That test signature is not a verified company signature. [Signing status](SIGNING.md) describes the remaining publisher-signing requirements; examples below explicitly build development packages.
 
 The working audio installation is Windows x64. The native engine uses C++17, Visual Studio 2022 Build Tools with a Windows SDK, CMake, and dynamically linked FFmpeg libraries. Python 3 is used for several integration tests. WiX 3.14 is used to build the MSI. The custom WaveRT driver source is included separately and requires the Windows Driver Kit; the verified live route still uses signed vendor drivers.
 

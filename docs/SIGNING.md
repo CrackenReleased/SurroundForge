@@ -1,6 +1,6 @@
 # Release signing and public distribution — v0.1.21-local package
 
-Status: signing enforcement is implemented; **no public signing identity or signed public release exists yet**. The old v0.1.10 MSI remains a private, unsigned migration artifact. The current v0.1.21 development MSI is also unsigned and explicitly labeled.
+Status: signing enforcement is implemented; **no publicly trusted Cracken Released signing identity exists yet**. The old v0.1.10 MSI remains a private, unsigned migration artifact. The v0.1.21 development MSI is unsigned. A separate v0.1.21 MSI is available as a [self-signed test download](../README.md#windows-installer); its local test certificate does not establish publisher identity or Microsoft approval.
 
 ## Free options and their limits
 
@@ -51,7 +51,7 @@ Once the signing identity and authenticated vendor prerequisites are ready, run 
   -SigningConfiguration "$PWD\.local\signing\signing.json"
 ```
 
-Current unsigned C-Media media must be resolved before this produces a public MSI. Real signing, timestamp validation and signed MSI install/removal have **not** been tested because no signing identity exists. Do not claim a signed release until they pass. SmartScreen reputation is separate; a valid new signature does not guarantee immediate absence of warnings.
+The bundled C-Media media does not carry a trusted publisher signature; the maintainer has stated that they hold written redistribution rights for both vendor installers. Publisher signing, timestamp validation and trusted-signed MSI install/removal have **not** been tested because no trusted signing identity exists. Do not claim a trusted release until they pass. SmartScreen reputation is separate; a valid new signature does not guarantee immediate absence of warnings.
 
 ## Local development verification
 

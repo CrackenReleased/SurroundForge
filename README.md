@@ -4,9 +4,11 @@
 
 ## Windows installer
 
-**[Find the Windows installer on GitHub Releases](https://github.com/CrackenReleased/SurroundForge/releases).** No public MSI is available yet. The complete v0.1.21 development MSI is built and checked locally, but it is unsigned and is not a public download. A release will appear at that link after publisher signing and bundled driver redistribution are cleared. See [release requirements](docs/SIGNING.md).
+**[Download the full-suite Windows MSI (v0.1.21 self-signed test build)](https://drive.google.com/file/d/1-atIP07hW2EeIfbp-tnkINMV22WeaiP-/view)** · [SHA-256 checksum](https://drive.google.com/file/d/1qh4olks95rOPkdTtZjd6DDoEdoMRbut7/view) · [Drive folder](https://drive.google.com/drive/folders/1JTfmUtjmWMC5eIWweqUcHF95GbZ90bKp)
 
-Source revision: **v0.1.21-local package**. The native engine is **v0.1.16-local**; controls are **v0.1.20-local**. No signed public installer or native-driver release has been produced.
+This 85 MiB MSI includes the SurroundForge application, native engine, dependencies, and the VB-CABLE and C-Media installer media. It is signed with a **local test certificate**, which does **not** establish a trusted Cracken Released publisher identity; Windows may report an unknown publisher. Verify the download's SHA-256 as `C2DF8EE257D375CEC8802206855450F5CE47061AB37F94EF32F8511ECE7F4CC6`. The custom SurroundForge kernel driver is **not** included. See the [MSI build and verification instructions](docs/BUILD.md#msi) and [signing status](docs/SIGNING.md).
+
+Source revision: **v0.1.21-local package**. The native engine is **v0.1.16-local**; controls are **v0.1.20-local**. No publicly trusted publisher-signed installer or native-driver release has been produced.
 
 Canonical local checkout: `E:\SurroundForge`. Public source: [CrackenReleased/SurroundForge](https://github.com/CrackenReleased/SurroundForge). Commands below run from the repository root; other computers may clone into any directory.
 
@@ -28,9 +30,9 @@ The WDK is not installed on the current development machine, and no compiled `.s
 
 ## Install and use the verified route
 
-The private v0.1.10 migration MSI and v0.1.21 development MSI are unsigned local artifacts, excluded from Git. Public MSI creation requires verified publisher signing and distributable vendor media.
+The downloadable self-signed test MSI is hosted in the Drive folder above, not in Git. It packages the vendor installers but does not install a custom SurroundForge kernel driver. A trusted publisher-signed release remains a separate signing milestone.
 
-1. On Windows x64, open **SurroundForge Setup** from the existing installation or run `surround/Setup.ps1` from a checkout with built dependencies.
+1. On Windows x64, download and run the MSI, then open **SurroundForge Setup**. From a source checkout with built dependencies, you can instead run `surround/Setup.ps1`.
 2. Connect the adapter's optical OUT to the receiver's optical IN and select that input.
 3. Install missing vendor drivers using Setup; restart if requested. Enable **SPDIF Out** in the adapter's C-Media/Xear settings.
 4. Select the virtual input and physical optical output, then **Save and start surround**. Enable startup if desired.

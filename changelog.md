@@ -1,7 +1,8 @@
-## v0.1.21-local — 2026-10-26 — Complete development MSI and GitHub release entry point
+## v0.1.21-local — 2026-10-26 — Complete development MSI and installer documentation
 
+- Host the self-signed full-suite test MSI and SHA-256 checksum in the maintainer's Google Drive folder, and link both directly from the README. Label the test certificate and native-driver limitation clearly; the GitHub Releases page remains unused.
 - Rebuild the full Windows suite from current v0.1.16 native engine and v0.1.20 controls into a v0.1.21 development MSI. Validate MSI identity, included scripts and executables, dependencies, complete original vendor media and destination-independent configuration.
-- Put a prominent Windows installer link at the top of the README, with the current public-release status stated beside it. Publisher signing and C-Media redistribution remain release gates; the unsigned development MSI stays outside GitHub and `dist`.
+- Put installer status at the top of the README. The reproducible development MSI stays outside GitHub and `dist`; a trusted publisher signature remains outstanding. The maintainer stated they hold written redistribution rights for the vendor installers.
 
 ## v0.1.20-local — 2026-10-22 — Sound output availability follows the audio engine
 
