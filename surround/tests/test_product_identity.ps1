@@ -3,6 +3,10 @@ param()
 $ErrorActionPreference='Stop'
 $project=Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 function Assert($value,[string]$message){if(-not $value){throw $message}}
+$rootLicense=Join-Path $project 'LICENSE'
+Assert (Test-Path -LiteralPath $rootLicense) 'Public SurroundForge repository must have a root license'
+$licenseText=Get-Content -LiteralPath $rootLicense -Raw
+Assert ($licenseText -match 'MIT License' -and $licenseText -match 'Cracken Released, LLC') 'Root MIT license must identify the SurroundForge publisher'
 $files=@('README.md','AGENTS.md','changelog.md','docs\BUILD.md','docs\TROUBLESHOOTING.md',
   'surround\Bridge.ps1','surround\Setup.ps1','surround\installer\Build-Msi.ps1',
   'surround\installer\Uninstall.ps1','surround\installer\Test-Msi.ps1',
@@ -37,6 +41,10 @@ Assert ($wavTable -match 'KSDATAFORMAT_SUBTYPE_IEEE_FLOAT') 'Kernel driver wave 
 Assert (Test-Path -LiteralPath (Join-Path $project 'surround\source\driver\New-AttestationCab.ps1')) 'Attestation CAB packaging script must exist'
 # Build prerequisites must fail closed rather than reporting success with no driver.
 $builder=Join-Path $project 'surround\source\driver\Build-Driver.ps1'
+$fixtureWdkRoot=Join-Path $project 'surround\tests\fixtures\wdk'
+$toolchainOutput=@(& powershell -NoProfile -ExecutionPolicy Bypass -File $builder -VerifyToolchainOnly -WdkBuildRoot $fixtureWdkRoot 2>&1)
+Assert ($LASTEXITCODE -eq 0) 'Driver builder must recognize versioned WDK props directories'
+Assert (($toolchainOutput -join ' ') -match '10\.0\.26100\.0\\WindowsDriver\.Default\.props') 'Driver builder selected the versioned WDK props fixture'
 $fixture={
   function Get-Command { [pscustomobject]@{Source='fixture-msbuild.exe'} }
   function Test-Path { $false }
