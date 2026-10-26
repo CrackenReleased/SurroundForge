@@ -1,4 +1,4 @@
-SurroundForge - v0.1.11
+SurroundForge - v0.1.21 development package
 
 1. Install this MSI on 64-bit Windows 10 or 11. Leave "Open SurroundForge Setup" selected.
 2. Connect your USB optical adapter. Connect its optical OUT to your receiver's optical IN; select its optical input.

@@ -14,7 +14,7 @@ foreach($file in $files){
 }
 $build=Get-Content -LiteralPath (Join-Path $project 'surround\installer\Build-Msi.ps1') -Raw
 Assert ($build -match 'Name="SurroundForge"') 'MSI product must be SurroundForge'
-Assert ($build -match 'Version="0\.1\.11"') 'MSI version must be 0.1.11'
+Assert ($build -match 'Version="0\.1\.21"') 'MSI version must be 0.1.21'
 Assert ($build -match 'Manufacturer="Cracken Released, LLC"') 'Use the legal company name in MSI metadata'
 Assert ($build -match 'UpgradeCode="5F84BC04-1D71-4E51-83D3-2832FCCF20F2"') 'Preserve the existing MSI upgrade identity'
 $bridge=Get-Content -LiteralPath (Join-Path $project 'surround\Bridge.ps1') -Raw

@@ -1,3 +1,8 @@
+## v0.1.21-local — 2026-10-26 — Complete development MSI and GitHub release entry point
+
+- Rebuild the full Windows suite from current v0.1.16 native engine and v0.1.20 controls into a v0.1.21 development MSI. Validate MSI identity, included scripts and executables, dependencies, complete original vendor media and destination-independent configuration.
+- Put a prominent Windows installer link at the top of the README, with the current public-release status stated beside it. Publisher signing and C-Media redistribution remain release gates; the unsigned development MSI stays outside GitHub and `dist`.
+
 ## v0.1.20-local — 2026-10-22 — Sound output availability follows the audio engine
 
 - Hide the unused `CABLE Input (VB-Audio Virtual Cable)` playback endpoint by exact ID, while leaving its shared VB-Audio driver and the configured six-channel endpoint intact.

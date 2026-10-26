@@ -2,7 +2,11 @@
 
 **Forge real PC surround sound through a USB optical adapter.**
 
-Source revision: **v0.1.16-local, migration revision 1**. The running audio engine remains **v0.1.15-local**; controls are v0.1.16 and MSI tooling remains v0.1.11. No signed public installer or native-driver release has been produced.
+## Windows installer
+
+**[Find the Windows installer on GitHub Releases](https://github.com/CrackenReleased/SurroundForge/releases).** No public MSI is available yet. The complete v0.1.21 development MSI is built and checked locally, but it is unsigned and is not a public download. A release will appear at that link after publisher signing and bundled driver redistribution are cleared. See [release requirements](docs/SIGNING.md).
+
+Source revision: **v0.1.21-local package**. The native engine is **v0.1.16-local**; controls are **v0.1.20-local**. No signed public installer or native-driver release has been produced.
 
 Canonical local checkout: `E:\SurroundForge`. Public source: [CrackenReleased/SurroundForge](https://github.com/CrackenReleased/SurroundForge). Commands below run from the repository root; other computers may clone into any directory.
 
@@ -24,7 +28,7 @@ The WDK is not installed on the current development machine, and no compiled `.s
 
 ## Install and use the verified route
 
-The private v0.1.10 migration MSI and v0.1.11 development MSI are unsigned local artifacts, excluded from Git. Public MSI creation requires verified publisher signing.
+The private v0.1.10 migration MSI and v0.1.21 development MSI are unsigned local artifacts, excluded from Git. Public MSI creation requires verified publisher signing and distributable vendor media.
 
 1. On Windows x64, open **SurroundForge Setup** from the existing installation or run `surround/Setup.ps1` from a checkout with built dependencies.
 2. Connect the adapter's optical OUT to the receiver's optical IN and select that input.

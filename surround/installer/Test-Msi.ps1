@@ -5,9 +5,9 @@ $ErrorActionPreference='Stop'
 if($DevelopmentUnsigned -and $SigningConfiguration){throw 'Choose signed release or unsigned development, not both.'}
 $policy=if(-not $DevelopmentUnsigned){Read-SigningConfiguration $SigningConfiguration}else{$null}
 $root=Split-Path $PSScriptRoot -Parent
-$msi=if($DevelopmentUnsigned){Join-Path $PSScriptRoot 'build\development\SurroundForge-0.1.11-x64-UNSIGNED-DEVELOPMENT.msi'}else{Join-Path $root 'dist\SurroundForge-0.1.11-x64.msi'}
+$msi=if($DevelopmentUnsigned){Join-Path $PSScriptRoot 'build\development\SurroundForge-0.1.21-x64-UNSIGNED-DEVELOPMENT.msi'}else{Join-Path $root 'dist\SurroundForge-0.1.21-x64.msi'}
 if($policy){Test-ReleaseSignature -Path $msi -Policy $policy | Out-Null}
-$validation=Join-Path $PSScriptRoot 'validation\0.1.11'
+$validation=Join-Path $PSScriptRoot 'validation\0.1.21'
 $extract=Join-Path $validation 'extract'
 New-Item -ItemType Directory -Path $validation -Force | Out-Null
 function Assert($value,[string]$message){if(-not $value){throw $message}}
@@ -25,7 +25,7 @@ function Query([string]$sql) {
   while($record=$view.Fetch()){$rows+=$record.StringData(1)}
   [void]$view.Close();return $rows
 }
-Assert ((Query "SELECT Value FROM Property WHERE Property='ProductVersion'") -eq '0.1.11') 'MSI product version mismatch'
+Assert ((Query "SELECT Value FROM Property WHERE Property='ProductVersion'") -eq '0.1.21') 'MSI product version mismatch'
 Assert ((Query "SELECT Value FROM Property WHERE Property='ProductName'") -eq 'SurroundForge') 'MSI product name mismatch'
 Assert ((Query "SELECT Value FROM Property WHERE Property='Manufacturer'") -eq 'Cracken Released, LLC') 'MSI manufacturer mismatch'
 Assert ((Query "SELECT Value FROM Property WHERE Property='UpgradeCode'") -eq '{5F84BC04-1D71-4E51-83D3-2832FCCF20F2}') 'Preserve MSI upgrade identity'
@@ -63,9 +63,9 @@ if($policy){
     else {Assert-MicrosoftSigningTool $file.FullName;Invoke-SigningTool $policy.SignToolPath @('verify','/pa','/all','/v',$file.FullName)}
   }
 }
-# Release 0.1.11 changes packaging/signing, not the verified 0.1.10 audio engine.
+# The full suite package must contain the current native engine, not a stale development runtime.
 $engineVersion=& (Join-Path $installedRoot 'Runtime\engine.exe') --version
-Assert ($LASTEXITCODE -eq 0 -and ($engineVersion -in 'SurroundForge 0.1.10-local','SurroundForge 0.1.15-local')) 'Packaged engine/runtime version mismatch or dependency load failure'
+Assert ($LASTEXITCODE -eq 0 -and $engineVersion -eq 'SurroundForge 0.1.16-local') 'Packaged engine/runtime version mismatch or dependency load failure'
 $devices=(& (Join-Path $installedRoot 'Runtime\bridge_control.exe') --devices-json) | ConvertFrom-Json
 Assert ($LASTEXITCODE -eq 0 -and $devices.Count -gt 0) 'Packaged controller/runtime dependency load failed'
 Get-ChildItem -LiteralPath (Join-Path $root 'vbcable') -File | ForEach-Object {
