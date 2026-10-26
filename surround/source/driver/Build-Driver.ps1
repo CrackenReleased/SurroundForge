@@ -15,7 +15,11 @@ param(
   [ValidateSet('x64', 'ARM64')]
   [string]$Platform = 'x64',
 
-  [switch]$Sign
+  [switch]$Sign,
+
+  [switch]$VerifyToolchainOnly,
+
+  [string]$WdkBuildRoot = 'C:\Program Files (x86)\Windows Kits\10\build'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -49,17 +53,20 @@ if (-not $msbuild) {
 }
 Write-Host "Using MSBuild: $msbuild" -ForegroundColor Green
 
-# 2. Check for Windows Driver Kit (WDK)
-$wdkProps = 'C:\Program Files (x86)\Windows Kits\10\build\WindowsDriver.Default.props'
-$hasWdk = Test-Path $wdkProps
-if (-not $hasWdk) {
-  $wdkAlt = Get-ChildItem -Path 'C:\Program Files (x86)\Windows Kits\10\build' -Filter '*WindowsDriver*' -ErrorAction SilentlyContinue
-  if ($wdkAlt) { $hasWdk = $true }
+# 2. Check for WDK props in both legacy and versioned kit layouts.
+$wdkProps = Join-Path $WdkBuildRoot 'WindowsDriver.Default.props'
+if (-not (Test-Path -LiteralPath $wdkProps)) {
+  $wdkProps = Get-ChildItem -LiteralPath $WdkBuildRoot -Directory -ErrorAction SilentlyContinue |
+    Sort-Object Name -Descending |
+    ForEach-Object { Join-Path $_.FullName 'WindowsDriver.Default.props' } |
+    Where-Object { Test-Path -LiteralPath $_ } |
+    Select-Object -First 1
 }
-
-if (-not $hasWdk) {
+if (-not $wdkProps) {
   throw 'Windows Driver Kit (WDK) is not installed. Install a compatible WDK before building the native driver.'
 }
+Write-Host "Using WDK props: $wdkProps" -ForegroundColor Green
+if ($VerifyToolchainOnly) { return }
 
 # 3. Build Driver Solution
 Write-Host "Building driver solution..." -ForegroundColor Yellow

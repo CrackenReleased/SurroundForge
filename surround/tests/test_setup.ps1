@@ -20,11 +20,11 @@ $brandedDevices=@(
   [pscustomobject]@{id='optical';name='SPDIF Out (USB Sound Device)';isSpdif=$true}
 )
 $brandedSelection=Get-SetupSelection $brandedDevices ''
-Assert ($brandedSelection.Input.id -eq 'sf-virtual') 'Must recognize SurroundForge 5.1 branded virtual input'
+Assert ($brandedSelection.Input.id -eq 'sf-kernel') 'A fresh setup must prefer the native SurroundForge driver over VB-CABLE'
 Assert ($brandedSelection.Outputs.Count -eq 1 -and $brandedSelection.Outputs[0].id -eq 'optical') 'Never offer SurroundForge virtual endpoint as physical optical output'
 $brandedDevices[0] | Add-Member NoteProperty active $false
 $brandedDevices[2] | Add-Member NoteProperty active $true
-Assert ((Get-SetupSelection $brandedDevices '').Input.id -eq 'sf-virtual') 'Setup must find its hidden configured input without exposing it in Windows'
+Assert ((Get-SetupSelection $brandedDevices '').Input.id -eq 'sf-kernel') 'Setup must find the native endpoint while another virtual endpoint is hidden'
 Assert ((Get-SetupSelection @($script:Devices + $brandedDevices) '' 'sf-virtual').Input.id -eq 'sf-virtual') 'Setup must prefer its saved input over an older cable endpoint'
 $sysDrive = if ($env:SystemDrive) { $env:SystemDrive } else { 'C:' }
 $sampleDir = Join-Path $sysDrive 'Sample'

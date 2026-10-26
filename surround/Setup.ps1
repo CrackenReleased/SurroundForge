@@ -49,6 +49,7 @@ function Get-SetupHardware {
 function Get-SetupSelection($Devices,[string]$SavedOutput,[string]$SavedInput='') {
   $inputs=@($Devices | Where-Object {Test-SetupMultichannelInput $_})
   $inputDevice=@($inputs | Where-Object {$_.id -eq $SavedInput}) | Select-Object -First 1
+  if(-not $inputDevice){$inputDevice=@($inputs | Where-Object {$_.name -eq 'SurroundForge 5.1 (SurroundForge Audio)'}) | Select-Object -First 1}
   if(-not $inputDevice){$inputDevice=$inputs | Select-Object -First 1}
   $outputs=@($Devices | Where-Object {$_.isSpdif -and $_.active -ne $false -and -not (Test-SetupVirtualOutput $_)})
   $preferred=@($outputs | Where-Object {$_.id -eq $SavedOutput}) | Select-Object -First 1
